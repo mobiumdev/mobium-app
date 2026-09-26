@@ -45,6 +45,7 @@
           "userTrackingPermission": "MobiumApp asks so a test can meet the prompt; it tracks nothing."
         }
       ],
+      "./plugins/withoutPushEntitlement",
       "expo-notifications"
     ]
   }
