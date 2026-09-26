@@ -1,0 +1,51 @@
+{
+  "expo": {
+    "name": "MobiumApp",
+    "slug": "mobiumapp",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "dev.mobium.mobiumapp"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#141826",
+        "foregroundImage": "./assets/mobium-mark.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "package": "dev.mobium.mobiumapp",
+      "permissions": [
+        "android.permission.POST_NOTIFICATIONS"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "MobiumApp shows the device's position so a test can confirm one was set."
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "MobiumApp asks for the camera so a test can meet the prompt; it takes no pictures.",
+          "microphonePermission": false,
+          "recordAudioAndroid": false
+        }
+      ],
+      [
+        "expo-tracking-transparency",
+        {
+          "userTrackingPermission": "MobiumApp asks so a test can meet the prompt; it tracks nothing."
+        }
+      ],
+      "expo-notifications"
+    ]
+  }
+}
