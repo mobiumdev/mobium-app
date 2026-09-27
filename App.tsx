@@ -1,6 +1,6 @@
 import React, {useEffect, useRef, useState} from 'react';
 import {
-  Image, Platform, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text,
+  Image, PixelRatio, Platform, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text,
   TextInput, View, Pressable,
 } from 'react-native';
 import {AccessibilityInfo, ActionSheetIOS, Alert, Animated, Easing, KeyboardAvoidingView, PanResponder, Share, Switch} from 'react-native';
@@ -226,7 +226,7 @@ bottom says which one the tap reached.</p>
   document.getElementById('frames').appendChild(cross);
 </script>`);
 
-type Screen = 'home' | 'webviewhub' | 'frames' | 'webview' | 'wide' | 'dual' | 'login' | 'secret' | 'location' | 'pager' | 'popup' | 'form' | 'gesturehub' | 'tappress' | 'drag' | 'flick' | 'pinch' | 'multitouch' | 'rotate' | 'doubletap' | 'motion' | 'crash' | 'storage' | 'dialogs';
+type Screen = 'home' | 'webviewhub' | 'frames' | 'webview' | 'wide' | 'dual' | 'login' | 'secret' | 'location' | 'pager' | 'popup' | 'form' | 'gesturehub' | 'tappress' | 'drag' | 'flick' | 'pinch' | 'multitouch' | 'rotate' | 'doubletap' | 'motion' | 'crash' | 'storage' | 'dialogs' | 'obstruction' | 'a11y';
 
 const SCREENS: [Screen, string][] = [
   ['webviewhub', 'WebViews'],
@@ -240,6 +240,8 @@ const SCREENS: [Screen, string][] = [
   ['crash', 'Crash Demo'],
   ['storage', 'Storage Demo'],
   ['dialogs', 'Dialog Demo'],
+  ['obstruction', 'Obstruction Demo'],
+  ['a11y', 'Accessibility Demo'],
 ];
 
 // The gesture witnesses, in the order of the touch-gesture charts mobium's
@@ -1364,6 +1366,185 @@ function DialogScreen() {
 // DraftField keeps its text in its own state. Change its key and it remounts,
 // taking the text with it — which is what a screen rebuilding does to anything
 // it was holding.
+// A11yScreen reports the accessibility settings the app is told about, on one
+// line a check can read: what the platform says to an app, which is the half
+// a setting written from outside has to reach before it is worth anything.
+// The system's own switches in Settings are the other half. Each value is
+// updated live from the platform's change event, and read afresh on Refresh,
+// so "changed while the app ran" can be told from "seen after a relaunch".
+type A11yFlags = {[k: string]: boolean};
+const A11Y_QUERIES: [string, () => Promise<boolean>][] = [
+  ['bold', AccessibilityInfo.isBoldTextEnabled],
+  ['contrast', AccessibilityInfo.isDarkerSystemColorsEnabled],
+  ['grayscale', AccessibilityInfo.isGrayscaleEnabled],
+  ['invert', AccessibilityInfo.isInvertColorsEnabled],
+  ['motion', AccessibilityInfo.isReduceMotionEnabled],
+  ['transparency', AccessibilityInfo.isReduceTransparencyEnabled],
+  ['screenReader', AccessibilityInfo.isScreenReaderEnabled],
+];
+const A11Y_EVENTS: [string, string][] = [
+  ['bold', 'boldTextChanged'],
+  ['contrast', 'darkerSystemColorsChanged'],
+  ['grayscale', 'grayscaleChanged'],
+  ['invert', 'invertColorsChanged'],
+  ['motion', 'reduceMotionChanged'],
+  ['transparency', 'reduceTransparencyChanged'],
+  ['screenReader', 'screenReaderChanged'],
+];
+
+function A11yScreen() {
+  const [flags, setFlags] = useState<A11yFlags>({});
+  const [changes, setChanges] = useState(0);
+  const [scale, setScale] = useState(PixelRatio.getFontScale());
+  const read = async () => {
+    const out: A11yFlags = {};
+    for (const [k, q] of A11Y_QUERIES) {
+      try { out[k] = await q(); } catch { out[k] = false; }
+    }
+    setFlags(out);
+    setScale(PixelRatio.getFontScale());
+  };
+  useEffect(() => {
+    read();
+    const subs = A11Y_EVENTS.map(([k, ev]) =>
+      AccessibilityInfo.addEventListener(ev as never, (v: boolean) => {
+        setFlags(f => ({...f, [k]: v}));
+        setChanges(n => n + 1);
+      }));
+    return () => subs.forEach(x => x.remove());
+  }, []);
+  const line = A11Y_QUERIES.map(([k]) => k + '=' + (flags[k] ?? '?')).join(' ') +
+    ' fontScale=' + scale.toFixed(2) + ' changes=' + changes;
+  return (
+    <ScrollView contentContainerStyle={s.dialogList}>
+      <Text style={s.lead}>
+        The accessibility settings this app is told about. Changes arrive as
+        they happen; Refresh asks again.
+      </Text>
+      <Text testID="a11yState" style={s.outcome}>{line}</Text>
+      <Btn id="a11yRefresh" label="Refresh" onPress={read} />
+      <Text testID="a11ySample" style={s.lead}>A line of body text, to see the size and weight change.</Text>
+    </ScrollView>
+  );
+}
+
+// ObstructionScreen is the control for an element that is in the hierarchy,
+// marked visible, with real bounds, that a tap cannot reach because the app
+// has drawn something else over it. Mobium refuses a target under a system
+// dialog and under the keyboard; this is the kind it could not see, the app's
+// own view.
+//
+// Each case is a target and a cover, the cover a later sibling so it draws on
+// top. Every cover is itself pressable, so `obstructionOutcome` says which one
+// really received the tap — the target, or the thing over it — and a tap that
+// reports success while landing on the cover can be told from one that
+// reached its target. The pass-through case is the negative control: covered
+// to the eye and not to a finger, so refusing it would be wrong.
+const TOAST_MS = 1500;
+
+function ObstructionScreen() {
+  const [taps, setTaps] = useState(0);
+  const [outcome, setOutcome] = useState('nothing yet');
+  const [toast, setToast] = useState(false);
+  const hit = (what: string) => {
+    setTaps(n => n + 1);
+    setOutcome(what);
+  };
+  const showToast = () => {
+    setToast(true);
+    setTimeout(() => setToast(false), TOAST_MS);
+  };
+  const target = (id: string, label: string) => (
+    <Pressable testID={id} accessibilityLabel={label} accessibilityRole="button"
+      style={s.btn} onPress={() => hit('target ' + id)}>
+      <Text style={s.btnText}>{label}</Text>
+    </Pressable>
+  );
+  const cover = (id: string, label: string, style: object) => (
+    <Pressable testID={id} accessibilityLabel={label} accessibilityRole="button"
+      style={[s.obsCover, style]} onPress={() => hit('cover ' + id)}>
+      <Text style={s.obsCoverText}>{label}</Text>
+    </Pressable>
+  );
+  return (
+    <ScrollView contentContainerStyle={s.dialogList}>
+      <Text style={s.lead}>
+        Each button has something drawn over it. The line says which one a tap
+        really reached.
+      </Text>
+      <Text testID="obstructionOutcome" style={s.outcome}>{taps}: {outcome}</Text>
+
+      <Text style={s.label}>Fully covered</Text>
+      <View style={s.obsCase}>
+        {target('fullTarget', 'Fully covered')}
+        {cover('fullCover', 'full cover', s.obsFull)}
+      </View>
+
+      <Text style={s.label}>Center covered</Text>
+      <View style={s.obsCase}>
+        {target('halfTarget', 'Center covered')}
+        {cover('halfCover', 'half cover', s.obsHalf)}
+      </View>
+
+      <Text style={s.label}>Edge covered, center clear</Text>
+      <View style={s.obsCase}>
+        {target('edgeTarget', 'Edge covered')}
+        {cover('edgeCover', 'edge cover', s.obsEdge)}
+      </View>
+
+      <Text style={s.label}>Covered by a view that takes no touches</Text>
+      <View style={s.obsCase}>
+        {target('passTarget', 'Pass-through')}
+        <View testID="passCover" accessible accessibilityLabel="pass-through cover"
+          pointerEvents="none" style={[s.obsCover, s.obsFull]}>
+          <Text style={s.obsCoverText}>pass-through cover</Text>
+        </View>
+      </View>
+
+      <Text style={s.label}>Covered by a plain view</Text>
+      <View style={s.obsCase}>
+        {target('plainTarget', 'Under a plain view')}
+        <View testID="plainCover" accessible accessibilityLabel="plain cover"
+          style={[s.obsCover, s.obsFull]}>
+          <Text style={s.obsCoverText}>plain cover</Text>
+        </View>
+      </View>
+      <Text style={s.note}>
+        A view with no touch handler of its own: it reports nothing when tapped,
+        and the button under it gets nothing either — so a tap here should leave
+        the line above unchanged.
+      </Text>
+
+      <Text style={s.label}>Under an overlay hidden from accessibility</Text>
+      <View style={s.obsCase}>
+        {target('hiddenTarget', 'Under a hidden overlay')}
+        <Pressable accessible={false} importantForAccessibility="no-hide-descendants"
+          accessibilityElementsHidden style={[s.obsCover, s.obsFull]}
+          onPress={() => hit('cover hidden overlay')}>
+          <Text style={s.obsCoverText}>hidden overlay</Text>
+        </Pressable>
+      </View>
+
+      <Text style={s.label}>Under a translucent scrim</Text>
+      <View style={s.obsCase}>
+        {target('scrimTarget', 'Under a scrim')}
+        {cover('scrimCover', 'scrim', s.obsScrim)}
+      </View>
+
+      <Text style={s.label}>Covered for a moment</Text>
+      <Btn id="toastBtn" label="Show a toast" onPress={showToast} />
+      <View style={s.obsCase}>
+        {target('toastTarget', 'Under a toast')}
+        {toast ? cover('toastCover', 'toast', s.obsFull) : null}
+      </View>
+      <Text style={s.note}>
+        The toast covers the button below it for {TOAST_MS / 1000} seconds and
+        takes touches while it is up.
+      </Text>
+    </ScrollView>
+  );
+}
+
 function DraftField({testID, label}: {testID: string; label: string}) {
   const [text, setText] = useState('');
   return (
@@ -1782,6 +1963,20 @@ export default function App() {
         </View>
       )}
 
+      {screen === 'a11y' && (
+        <View style={s.fill}>
+          <View style={s.padTop}>{back}</View>
+          <A11yScreen />
+        </View>
+      )}
+
+      {screen === 'obstruction' && (
+        <View style={s.fill}>
+          <View style={s.padTop}>{back}</View>
+          <ObstructionScreen />
+        </View>
+      )}
+
 
       {screen === 'popup' && (
         <View style={s.pad}>
@@ -1903,6 +2098,13 @@ const lightStyles = StyleSheet.create({
   dragEndZone: {height: 100, borderRadius: 10, backgroundColor: '#6a3ab4', alignItems: 'center', justifyContent: 'center', marginBottom: 10},
   tapZone: {height: 140, borderRadius: 10, backgroundColor: '#2f7d4f', alignItems: 'center', justifyContent: 'center'},
   motionTarget: {width: '55%', backgroundColor: '#2f7d4f', padding: 14, borderRadius: 8},
+  obsCase: {position: 'relative'},
+  obsCover: {position: 'absolute', top: 0, bottom: 10, justifyContent: 'center', alignItems: 'center', borderRadius: 8},
+  obsCoverText: {color: '#fff', fontSize: 13},
+  obsFull: {left: 0, right: 0, backgroundColor: '#5832FA'},
+  obsHalf: {left: 0, width: '60%', backgroundColor: '#5832FA'},
+  obsEdge: {left: 0, width: '25%', backgroundColor: '#5832FA'},
+  obsScrim: {left: 0, right: 0, backgroundColor: 'rgba(20, 24, 38, 0.55)'},
 });
 // The dark theme is the light one with its colors replaced, so no style can
 // exist in one and be missing from the other. `s` is what every component
