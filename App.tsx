@@ -178,6 +178,57 @@ browser's own zoom level, read from visualViewport.</p>
   window.pinchScale = function () { return visualViewport.scale; };
 </script></body></html>`;
 
+// ACTIONABLE is the Obstruction Demo's web counterpart: each case is a way a
+// page makes a tap land somewhere other than its target, or nowhere. Every
+// cover records a tap on itself, so actState() — and the line at the top —
+// says what a tap really reached. The pointer-events:none layer is the
+// negative control: covered to the eye and not to a finger. Unlike a native
+// tree, a page can hit-test a point (document.elementFromPoint), so here the
+// plain div that swallows a tap is detectable.
+const ACTIONABLE = page('Actionability', `
+<style>
+  .case{position:relative;margin:0 0 14px}
+  .case button{display:block;width:100%;height:48px;font:inherit}
+  .cov{position:absolute;top:0;bottom:0;background:#5832FA;color:#fff;font-size:13px;display:flex;align-items:center;justify-content:center}
+  .full{left:0;right:0}.half{left:0;width:60%}
+  .ghost{pointer-events:none;opacity:.6}
+  .slide{animation:slide 2s ease-out}
+  @keyframes slide{from{margin-left:40%}to{margin-left:0}}
+  #out{position:sticky;top:0;background:#fff;padding:6px 0;font-size:14px}
+</style>
+<div id="out">0: nothing yet</div>
+<div class="case"><button data-testid="wReplay">Replay the slide</button></div>
+<div class="case"><button data-testid="wSlide" class="slide">Sliding in</button></div>
+<div class="case"><button data-testid="wDisabled" disabled>Always disabled</button></div>
+<div class="case"><button data-testid="wArm">Arm: disable the next one for 2 s</button></div>
+<div class="case"><button data-testid="wEnabling">Enabled after Arm + 2 s</button></div>
+<div class="case"><button data-testid="wAria" aria-disabled="true">aria-disabled</button></div>
+<div class="case"><button data-testid="wFull">Fully covered</button><div class="cov full" data-cover="full">full cover</div></div>
+<div class="case"><button data-testid="wHalf">Center covered</button><div class="cov half" data-cover="half">half cover</div></div>
+<div class="case"><button data-testid="wPass">Pass-through</button><div class="cov full ghost">pointer-events: none</div></div>
+<div class="case"><button data-testid="wPlain">Under a plain div</button><div class="cov full" style="background:rgba(20,24,38,.5)">plain div</div></div>
+<div style="height:1400px"></div>
+<div class="case"><button data-testid="wBelow">Below the fold</button></div>
+<script>
+  var n = 0, last = 'nothing yet', t0 = performance.now();
+  function hit(what){ n++; last = what; document.getElementById('out').textContent = n + ': ' + what; }
+  document.querySelectorAll('button[data-testid]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var id = b.getAttribute('data-testid');
+      if (id === 'wReplay') { var s = document.querySelector('[data-testid=wSlide]');
+        s.classList.remove('slide'); void s.offsetWidth; s.classList.add('slide'); t0 = performance.now(); hit('replayed'); return; }
+      if (id === 'wArm') { var e = document.querySelector('[data-testid=wEnabling]');
+        e.disabled = true; setTimeout(function () { e.disabled = false; }, 2000); hit('armed'); return; }
+      if (id === 'wSlide') { hit('target wSlide ' + Math.round(performance.now() - t0) + 'ms after replay'); return; }
+      hit('target ' + id);
+    });
+  });
+  document.querySelectorAll('[data-cover]').forEach(function (c) {
+    c.addEventListener('click', function () { hit('cover ' + c.getAttribute('data-cover')); });
+  });
+  window.actState = function () { return {taps: n, last: last}; };
+</script>`);
+
 const PLAIN = page('Plain page', `<p id="para">The quick brown fox.</p>${LEARN_MORE}`);
 const WIDE = page('Wide page', `<p id="para">Laid out at 1200 CSS pixels.</p>${LEARN_MORE}`, 'width=1200');
 const SECOND = page('Second page', `<p id="para">A different page in a second WebView.</p>${LEARN_MORE}`);
@@ -226,7 +277,7 @@ bottom says which one the tap reached.</p>
   document.getElementById('frames').appendChild(cross);
 </script>`);
 
-type Screen = 'home' | 'webviewhub' | 'frames' | 'webview' | 'wide' | 'dual' | 'login' | 'secret' | 'location' | 'pager' | 'popup' | 'form' | 'gesturehub' | 'tappress' | 'drag' | 'flick' | 'pinch' | 'multitouch' | 'rotate' | 'doubletap' | 'motion' | 'crash' | 'storage' | 'dialogs' | 'obstruction' | 'a11y';
+type Screen = 'home' | 'webviewhub' | 'frames' | 'webview' | 'wide' | 'dual' | 'login' | 'secret' | 'location' | 'pager' | 'popup' | 'form' | 'gesturehub' | 'tappress' | 'drag' | 'flick' | 'pinch' | 'multitouch' | 'rotate' | 'doubletap' | 'motion' | 'crash' | 'storage' | 'dialogs' | 'obstruction' | 'a11y' | 'actionable';
 
 const SCREENS: [Screen, string][] = [
   ['webviewhub', 'WebViews'],
@@ -276,6 +327,10 @@ const WEBVIEW_SCREENS: [Screen, string, string][] = [
   ['dual', 'Two WebViews',
     'Two pages alive at once, one above the other. A tool has to list them as two contexts and act on ' +
     'the one you chose, not whichever it found first.'],
+  ['actionable', 'Actionability',
+    'Targets a page makes hard to tap: one sliding in, disabled ones, covered ones, one under a layer that ' +
+    'takes no touches, one under a plain div, and one below the fold. The line at the top says what a ' +
+    'tap really reached.'],
   ['frames', 'Frames',
     'One page holding frames: one from its own origin, one nested inside that, and one from another ' +
     'origin. Tap each button and the line at the bottom says which frame the tap reached. Whether a ' +
@@ -1852,6 +1907,7 @@ export default function App() {
           neither, so both rendered empty on an iPhone 17 Pro simulator while
           Android, which does not apply the list to frames, drew them. */}
       {screen === 'frames' && <Web id="framesWebview" html={FRAMES} origins={['*']} />}
+      {screen === 'actionable' && <Web id="actionWebview" html={ACTIONABLE} />}
 
       {screen === 'login' && (
         // The form scrolls, and moves out of the keyboard's way on iOS, so Log
