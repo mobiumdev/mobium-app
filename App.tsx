@@ -229,6 +229,45 @@ const ACTIONABLE = page('Actionability', `
   window.actState = function () { return {taps: n, last: last}; };
 </script>`);
 
+// WEBFORM is the control for typing into a page. Each field is a case a
+// tool can get wrong: a plain text input whose input listener mirrors it (so
+// "the value changed" can be told from "the page heard it change"), an email
+// input and a textarea, fields that must refuse text — read-only,
+// aria-readonly, disabled — a password field, which the page reports only by
+// length, and a checkbox, which is not a text field at all.
+const WEBFORM = page('Web form', `
+<style>
+  label{display:block;font-size:13px;color:#555;margin:10px 0 4px}
+  input,textarea{display:block;width:100%;box-sizing:border-box;font:inherit;padding:8px}
+  #mirror{font-size:13px;color:#2f7d4f;margin-top:4px}
+</style>
+<label>Text</label><input data-testid="fText" placeholder="text input">
+<div id="mirror">mirror: </div>
+<label>Email</label><input data-testid="fEmail" type="email" placeholder="email input">
+<label>Notes</label><textarea data-testid="fArea" placeholder="notes"></textarea>
+<label>Read-only</label><input data-testid="fReadonly" value="fixed" readonly>
+<label>aria-readonly</label><input data-testid="fAriaReadonly" aria-readonly="true" placeholder="aria-readonly">
+<label>Disabled</label><input data-testid="fDisabled" placeholder="disabled" disabled>
+<label>Password</label><input data-testid="fPassword" type="password" placeholder="password">
+<label><input data-testid="fCheck" type="checkbox"> A checkbox</label>
+<script>
+  var inputs = 0, changes = 0;
+  var text = document.querySelector('[data-testid=fText]');
+  text.addEventListener('input', function () { document.getElementById('mirror').textContent = 'mirror: ' + text.value; });
+  document.querySelectorAll('input,textarea').forEach(function (f) {
+    f.addEventListener('input', function () { inputs++; });
+    f.addEventListener('change', function () { changes++; });
+  });
+  var v = function (id) { return document.querySelector('[data-testid=' + id + ']').value; };
+  window.formState = function () {
+    return {text: v('fText'), email: v('fEmail'), area: v('fArea'), readonly: v('fReadonly'),
+      ariaReadonly: v('fAriaReadonly'), disabled: v('fDisabled'), passwordLength: v('fPassword').length,
+      checked: document.querySelector('[data-testid=fCheck]').checked,
+      mirror: document.getElementById('mirror').textContent, inputs: inputs, changes: changes};
+  };
+  window.passwordIs = function (s) { return v('fPassword') === s; };
+</script>`);
+
 const PLAIN = page('Plain page', `<p id="para">The quick brown fox.</p>${LEARN_MORE}`);
 const WIDE = page('Wide page', `<p id="para">Laid out at 1200 CSS pixels.</p>${LEARN_MORE}`, 'width=1200');
 const SECOND = page('Second page', `<p id="para">A different page in a second WebView.</p>${LEARN_MORE}`);
@@ -277,7 +316,7 @@ bottom says which one the tap reached.</p>
   document.getElementById('frames').appendChild(cross);
 </script>`);
 
-type Screen = 'home' | 'webviewhub' | 'frames' | 'webview' | 'wide' | 'dual' | 'login' | 'secret' | 'location' | 'pager' | 'popup' | 'form' | 'gesturehub' | 'tappress' | 'drag' | 'flick' | 'pinch' | 'multitouch' | 'rotate' | 'doubletap' | 'motion' | 'crash' | 'storage' | 'dialogs' | 'obstruction' | 'a11y' | 'actionable';
+type Screen = 'home' | 'webviewhub' | 'frames' | 'webview' | 'wide' | 'dual' | 'login' | 'secret' | 'location' | 'pager' | 'popup' | 'form' | 'gesturehub' | 'tappress' | 'drag' | 'flick' | 'pinch' | 'multitouch' | 'rotate' | 'doubletap' | 'motion' | 'crash' | 'storage' | 'dialogs' | 'obstruction' | 'a11y' | 'actionable' | 'webform';
 
 const SCREENS: [Screen, string][] = [
   ['webviewhub', 'WebViews'],
@@ -331,6 +370,10 @@ const WEBVIEW_SCREENS: [Screen, string, string][] = [
     'Targets a page makes hard to tap: one sliding in, disabled ones, covered ones, one under a layer that ' +
     'takes no touches, one under a plain div, and one below the fold. The line at the top says what a ' +
     'tap really reached.'],
+  ['webform', 'Web form',
+    'Fields in a page to type into: plain, email and multi-line ones, ones that must refuse text — ' +
+    'read-only, aria-readonly and disabled — a password field, and a checkbox, which is not a text ' +
+    'field at all. The page says what each one holds.'],
   ['frames', 'Frames',
     'One page holding frames: one from its own origin, one nested inside that, and one from another ' +
     'origin. Tap each button and the line at the bottom says which frame the tap reached. Whether a ' +
@@ -1908,6 +1951,7 @@ export default function App() {
           Android, which does not apply the list to frames, drew them. */}
       {screen === 'frames' && <Web id="framesWebview" html={FRAMES} origins={['*']} />}
       {screen === 'actionable' && <Web id="actionWebview" html={ACTIONABLE} />}
+      {screen === 'webform' && <Web id="formWebview" html={WEBFORM} />}
 
       {screen === 'login' && (
         // The form scrolls, and moves out of the keyboard's way on iOS, so Log
