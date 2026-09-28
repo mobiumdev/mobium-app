@@ -316,11 +316,12 @@ bottom says which one the tap reached.</p>
   document.getElementById('frames').appendChild(cross);
 </script>`);
 
-type Screen = 'home' | 'webviewhub' | 'frames' | 'webview' | 'wide' | 'dual' | 'login' | 'secret' | 'location' | 'pager' | 'popup' | 'form' | 'gesturehub' | 'tappress' | 'drag' | 'flick' | 'pinch' | 'multitouch' | 'rotate' | 'doubletap' | 'motion' | 'crash' | 'storage' | 'dialogs' | 'obstruction' | 'a11y' | 'actionable' | 'webform' | 'layout';
+type Screen = 'home' | 'webviewhub' | 'frames' | 'webview' | 'wide' | 'dual' | 'login' | 'otp' | 'secret' | 'location' | 'pager' | 'popup' | 'form' | 'gesturehub' | 'tappress' | 'drag' | 'flick' | 'pinch' | 'multitouch' | 'rotate' | 'doubletap' | 'motion' | 'crash' | 'storage' | 'dialogs' | 'obstruction' | 'a11y' | 'actionable' | 'webform' | 'layout';
 
 const SCREENS: [Screen, string][] = [
   ['webviewhub', 'WebViews'],
   ['login', 'Login Demo'],
+  ['otp', 'OTP Demo'],
   ['location', 'Location Demo'],
   ['pager', 'Pager Demo'],
   ['popup', 'Interruption Demo'],
@@ -1808,6 +1809,159 @@ const USERNAME_MAX = 32;
 const PASSWORD_MAX = 64;
 const SIGN_IN_MS = 1000;
 
+// The OTP Demo: a one-time code, the way a second factor asks for one. What
+// automation finds hard about it is the field — six single-digit boxes that
+// move focus on every digit and back on delete, where a tool that types the
+// whole code into the first box, or loses a keystroke while focus moves, gets
+// it wrong — and where the code comes from. The code is random and arrives as
+// a local notification, which a check reads from the shade, or on screen, for
+// a platform where the shade cannot be read. It expires, can be resent after
+// a cooldown, and three wrong codes lock the form. `otpEntered` shows exactly
+// what the boxes hold, so a dropped keystroke is seen rather than inferred.
+const OTP_LEN = 6;
+const OTP_TTL_S = 60;
+const OTP_RESEND_S = 20;
+const OTP_ATTEMPTS = 3;
+
+// A notification posted while the app is in front is shown only if the app
+// says so; without a handler it is dropped, and the code would never reach
+// the shade.
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowBanner: true, shouldShowList: true, shouldPlaySound: false, shouldSetBadge: false,
+  }),
+});
+
+function OtpScreen() {
+  const [code, setCode] = useState('');
+  const [used, setUsed] = useState(false);
+  const [sentAt, setSentAt] = useState(0);
+  const [now, setNow] = useState(Date.now());
+  const [boxes, setBoxes] = useState<string[]>(Array(OTP_LEN).fill(''));
+  const [single, setSingle] = useState('');
+  const [attempts, setAttempts] = useState(0);
+  const [outcome, setOutcome] = useState('no code sent');
+  const [showCode, setShowCode] = useState(false);
+  const refs = useRef<(TextInput | null)[]>([]);
+
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  const age = sentAt ? Math.floor((now - sentAt) / 1000) : 0;
+  const expiresIn = sentAt ? Math.max(0, OTP_TTL_S - age) : 0;
+  const resendIn = sentAt ? Math.max(0, OTP_RESEND_S - age) : 0;
+  const locked = attempts >= OTP_ATTEMPTS;
+
+  const send = async () => {
+    const c = String(Math.floor(Math.random() * 1e6)).padStart(OTP_LEN, '0');
+    const t = Date.now();
+    setCode(c); setUsed(false); setSentAt(t); setNow(t); setAttempts(0);
+    setBoxes(Array(OTP_LEN).fill('')); setSingle('');
+    const perm = await Notifications.requestPermissionsAsync();
+    if (!perm.granted) {
+      setOutcome('sent; notifications are off, so switch on the code below');
+      return;
+    }
+    await Notifications.scheduleNotificationAsync({
+      content: {title: 'MobiumApp', body: `Your MobiumApp code is ${c}`},
+      trigger: null,
+    });
+    setOutcome('sent as a notification');
+  };
+
+  const verify = (entered: string) => {
+    if (!code) return setOutcome('no code sent');
+    if (used) return setOutcome('already used: send a new code');
+    if (locked) return setOutcome('locked: too many attempts');
+    if (expiresIn === 0) return setOutcome('expired: send a new code');
+    if (entered.length !== OTP_LEN) return setOutcome(`incomplete: ${entered.length} of ${OTP_LEN} digits`);
+    if (entered === code) {
+      setUsed(true);
+      return setOutcome('verified');
+    }
+    const n = attempts + 1;
+    setAttempts(n);
+    setOutcome(n >= OTP_ATTEMPTS ? 'locked: too many attempts'
+      : `wrong code, ${OTP_ATTEMPTS - n} ${OTP_ATTEMPTS - n === 1 ? 'attempt' : 'attempts'} left`);
+  };
+
+  // A digit moves focus on; more than one — a paste, or the platform filling
+  // in a code — is spread across the boxes from this one.
+  const onBox = (i: number, text: string) => {
+    const digits = text.replace(/\D/g, '');
+    const next = [...boxes];
+    if (digits.length > 1) {
+      for (let k = 0; k < digits.length && i + k < OTP_LEN; k++) next[i + k] = digits[k];
+      setBoxes(next);
+      refs.current[Math.min(OTP_LEN - 1, i + digits.length)]?.focus();
+      return;
+    }
+    next[i] = digits;
+    setBoxes(next);
+    if (digits && i < OTP_LEN - 1) refs.current[i + 1]?.focus();
+  };
+  // Delete in an empty box goes back and clears the one before.
+  const onKey = (i: number, key: string) => {
+    if (key !== 'Backspace' || boxes[i] || i === 0) return;
+    const next = [...boxes];
+    next[i - 1] = '';
+    setBoxes(next);
+    refs.current[i - 1]?.focus();
+  };
+
+  const sendLabel = !code ? 'Send code' : resendIn > 0 ? `Resend in ${resendIn}s` : 'Resend code';
+
+  return (
+    <View>
+      <Text style={s.h1}>One-time code</Text>
+      <Text style={s.lead}>
+        A code after the password, as a second factor asks for one. The six boxes move focus on
+        every digit and back on delete: typing the whole code into the first box, or losing a
+        keystroke while focus moves, gets it wrong, and "entered" shows exactly what they hold. The
+        code arrives as a notification, or here with the switch. It expires in {OTP_TTL_S} seconds,
+        can be resent after {OTP_RESEND_S}, and {OTP_ATTEMPTS} wrong codes lock the form.
+      </Text>
+
+      <Btn id="otpSend" label={sendLabel} onPress={send} disabled={!!code && resendIn > 0} />
+      <View style={s.row}>
+        <Switch testID="otpShowCode" accessibilityLabel="Show the code here"
+          value={showCode} onValueChange={setShowCode} />
+        <Text style={s.rowText}>  Show the code here</Text>
+      </View>
+      {showCode && code ? <Text testID="otpCodeShown" style={s.mono}>code: {code}</Text> : null}
+      <Text testID="otpExpires" style={s.note}>
+        {!code ? 'no code' : used ? 'used' : expiresIn > 0 ? `expires in ${expiresIn}s` : 'expired'}
+      </Text>
+      {/* Near the top, so the answer stays on screen while the keyboard is up. */}
+      <Text testID="otpOutcome" accessibilityRole="alert" style={s.outcome}>{outcome}</Text>
+
+      <Text style={s.label}>Six boxes</Text>
+      <View style={s.otpRow}>
+        {boxes.map((b, i) => (
+          <TextInput key={i} ref={r => { refs.current[i] = r; }}
+            testID={`otpBox${i}`} accessibilityLabel={`digit ${i + 1}`}
+            style={s.otpBox} value={b} keyboardType="number-pad"
+            autoComplete="off" textContentType="none" autoCorrect={false}
+            onChangeText={t => onBox(i, t)}
+            onKeyPress={e => onKey(i, e.nativeEvent.key)} />
+        ))}
+      </View>
+      <Text testID="otpEntered" style={s.mono}>entered: {boxes.map(b => b || '_').join('')}</Text>
+      <Btn id="otpVerifyBoxes" label="Verify the boxes" onPress={() => verify(boxes.join(''))} />
+
+      <Text style={s.label}>One field</Text>
+      <TextInput testID="otpField" accessibilityLabel="one-time code" placeholder="6-digit code"
+        style={s.input} value={single} maxLength={OTP_LEN} keyboardType="number-pad"
+        textContentType="oneTimeCode" autoComplete="sms-otp"
+        onChangeText={t => setSingle(t.replace(/\D/g, ''))} />
+      <Btn id="otpVerifyField" label="Verify the field" onPress={() => verify(single)} />
+
+    </View>
+  );
+}
+
 function sanitizeUsername(raw: string): string {
   return raw.normalize('NFC').trim().toLowerCase();
 }
@@ -2086,6 +2240,13 @@ export default function App() {
         </View>
       )}
 
+      {screen === 'otp' && (
+        <ScrollView contentContainerStyle={s.pad} keyboardShouldPersistTaps="handled">
+          {back}
+          <OtpScreen />
+        </ScrollView>
+      )}
+
       {screen === 'storage' && (
         <View style={s.pad}>
           {back}
@@ -2208,6 +2369,8 @@ const lightStyles = StyleSheet.create({
     marginBottom: 14,
   },
   row: {flexDirection: 'row', alignItems: 'center', marginBottom: 10},
+  otpRow: {flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8},
+  otpBox: {width: 46, height: 54, borderWidth: 1, borderColor: '#bbb', borderRadius: 8, textAlign: 'center', fontSize: 22},
   box: {fontSize: 22, marginRight: 10},
   rowText: {fontSize: 16, flexShrink: 1},
   group: {marginVertical: 8},
@@ -2256,6 +2419,7 @@ const darkStyles = StyleSheet.create({
   outcome: {...lightStyles.outcome, color: DARK.text},
   h1: {...lightStyles.h1, color: DARK.text},
   input: {...lightStyles.input, borderColor: DARK.line, color: DARK.text},
+  otpBox: {...lightStyles.otpBox, borderColor: DARK.line, color: DARK.text},
   err: {...lightStyles.err, color: '#FF7B7B'},
   ok: {...lightStyles.ok, color: '#4ADE80'},
   hint: {...lightStyles.hint, backgroundColor: '#1F2540'},
