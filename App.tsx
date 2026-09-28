@@ -1,7 +1,7 @@
 import React, {useEffect, useRef, useState} from 'react';
 import {
   Image, PixelRatio, Platform, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text,
-  TextInput, View, Pressable,
+  TextInput, View, Pressable, useWindowDimensions,
 } from 'react-native';
 import {AccessibilityInfo, ActionSheetIOS, Alert, Animated, Easing, KeyboardAvoidingView, PanResponder, Share, Switch} from 'react-native';
 import {WebView} from 'react-native-webview';
@@ -316,7 +316,7 @@ bottom says which one the tap reached.</p>
   document.getElementById('frames').appendChild(cross);
 </script>`);
 
-type Screen = 'home' | 'webviewhub' | 'frames' | 'webview' | 'wide' | 'dual' | 'login' | 'secret' | 'location' | 'pager' | 'popup' | 'form' | 'gesturehub' | 'tappress' | 'drag' | 'flick' | 'pinch' | 'multitouch' | 'rotate' | 'doubletap' | 'motion' | 'crash' | 'storage' | 'dialogs' | 'obstruction' | 'a11y' | 'actionable' | 'webform';
+type Screen = 'home' | 'webviewhub' | 'frames' | 'webview' | 'wide' | 'dual' | 'login' | 'secret' | 'location' | 'pager' | 'popup' | 'form' | 'gesturehub' | 'tappress' | 'drag' | 'flick' | 'pinch' | 'multitouch' | 'rotate' | 'doubletap' | 'motion' | 'crash' | 'storage' | 'dialogs' | 'obstruction' | 'a11y' | 'actionable' | 'webform' | 'layout';
 
 const SCREENS: [Screen, string][] = [
   ['webviewhub', 'WebViews'],
@@ -332,6 +332,7 @@ const SCREENS: [Screen, string][] = [
   ['dialogs', 'Dialog Demo'],
   ['obstruction', 'Obstruction Demo'],
   ['a11y', 'Accessibility Demo'],
+  ['layout', 'Layout Demo'],
 ];
 
 // The gesture witnesses, in the order of the touch-gesture charts mobium's
@@ -1226,6 +1227,35 @@ function CrashScreen() {
 // caches them, which is a question of its own and not this screen's.
 const STORE = 'mobium-storage.json';
 
+// LayoutScreen is the positive control for mobium's layout inspection
+// (formflux): two touch targets whose verdict is known at every screen size,
+// so a run that reports nothing can be told from one that cannot see. The
+// tiny one is 24dp square, under Android's 48dp at every size. The narrow
+// one is an eighth of the window's width and 60dp tall: 51dp wide on a
+// 411dp screen, and under 48dp once the screen is narrower than 384dp — a
+// target that breaks when the screen shrinks, which is the thing formflux
+// exists to find.
+function LayoutScreen() {
+  const {width} = useWindowDimensions();
+  const narrow = Math.round(width / 8);
+  const [last, setLast] = useState('nothing yet');
+  return (
+    <View>
+      <Text style={s.h1}>Layout</Text>
+      <Text style={s.lead}>
+        Two targets sized to fail. The square one is too small at every screen size; the wide bar is an
+        eighth of the screen across, and becomes too narrow to tap once the screen is under 384dp.
+      </Text>
+      <Pressable testID="tinyTarget" accessibilityLabel="Tiny target" accessibilityRole="button"
+        onPress={() => setLast('tiny')} style={[s.target, {width: 24, height: 24}]} />
+      <Pressable testID="narrowTarget" accessibilityLabel="Narrow target" accessibilityRole="button"
+        onPress={() => setLast('narrow')} style={[s.target, {width: narrow, height: 60, marginTop: 16}]} />
+      <Text testID="layoutWidth" style={s.note}>window {Math.round(width)}dp, narrow target {narrow}dp</Text>
+      <Text testID="layoutLast" style={s.note}>last: {last}</Text>
+    </View>
+  );
+}
+
 function StorageScreen() {
   const [count, setCount] = useState(0);
   const [present, setPresent] = useState(false);
@@ -2046,6 +2076,13 @@ export default function App() {
         <View style={s.pad}>
           {back}
           <CrashScreen />
+        </View>
+      )}
+
+      {screen === 'layout' && (
+        <View style={s.pad}>
+          {back}
+          <LayoutScreen />
         </View>
       )}
 
