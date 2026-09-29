@@ -6,6 +6,7 @@ import {
 import {AccessibilityInfo, ActionSheetIOS, Alert, Animated, Easing, KeyboardAvoidingView, PanResponder, Share, Switch} from 'react-native';
 import {WebView} from 'react-native-webview';
 import * as Battery from 'expo-battery';
+import Downloads from './modules/downloads/src/DownloadsModule';
 import * as Location from 'expo-location';
 import {File, Paths} from 'expo-file-system';
 import * as Notifications from 'expo-notifications';
@@ -373,7 +374,7 @@ bottom says which one the tap reached.</p>
   document.getElementById('frames').appendChild(cross);
 </script>`);
 
-type Screen = 'home' | 'webviewhub' | 'frames' | 'webview' | 'wide' | 'dual' | 'login' | 'otp' | 'secret' | 'location' | 'pager' | 'popup' | 'form' | 'gesturehub' | 'tappress' | 'drag' | 'flick' | 'pinch' | 'multitouch' | 'rotate' | 'doubletap' | 'motion' | 'crash' | 'storage' | 'dialogs' | 'obstruction' | 'a11y' | 'actionable' | 'webform' | 'layout' | 'webstorage' | 'battery';
+type Screen = 'home' | 'webviewhub' | 'frames' | 'webview' | 'wide' | 'dual' | 'login' | 'otp' | 'secret' | 'location' | 'pager' | 'popup' | 'form' | 'gesturehub' | 'tappress' | 'drag' | 'flick' | 'pinch' | 'multitouch' | 'rotate' | 'doubletap' | 'motion' | 'crash' | 'storage' | 'dialogs' | 'obstruction' | 'a11y' | 'actionable' | 'webform' | 'layout' | 'webstorage' | 'battery' | 'files';
 
 const SCREENS: [Screen, string][] = [
   ['webviewhub', 'WebViews'],
@@ -392,6 +393,7 @@ const SCREENS: [Screen, string][] = [
   ['a11y', 'Accessibility Demo'],
   ['layout', 'Layout Demo'],
   ['battery', 'Battery Demo'],
+  ['files', 'Files Demo'],
 ];
 
 // The gesture witnesses, in the order of the touch-gesture charts mobium's
@@ -1438,6 +1440,73 @@ function BatteryScreen() {
   );
 }
 
+// FilesScreen is the observer for app_upload and app_download: a file that
+// crosses between a computer and the device, checked from the app's side.
+//
+// Download saves a small report where the device keeps downloads — the
+// shared Download folder on Android, through MediaStore as an app's own
+// downloads land; the app's Documents folder on iOS, which the Files app
+// shows — and says what it wrote, so a file brought back can be compared
+// with what the app saved. Upload opens the system file picker, which is
+// where a file sent to the device has to be findable, and says the name,
+// size and first line of what was picked, so the app confirms what arrived.
+// Nothing is fetched: the report is written here, and the picker only reads.
+const REPORT_NAME = 'mobium-report.txt';
+
+function FilesScreen() {
+  const [saves, setSaves] = useState(0);
+  const [saved, setSaved] = useState('nothing yet');
+  const [picked, setPicked] = useState('nothing yet');
+  const [err, setErr] = useState('');
+
+  const saveReport = async () => {
+    const n = saves + 1;
+    const text = `MobiumApp report ${n}\nSaved by the Files Demo.\n`;
+    try {
+      const where = await Downloads.saveAsync(REPORT_NAME, text);
+      setSaves(n);
+      setSaved(`${where} (${text.length} bytes) — MobiumApp report ${n}`);
+      setErr('');
+    } catch (e) {
+      setErr(String(e));
+    }
+  };
+
+  const pick = async () => {
+    try {
+      const result = await File.pickFileAsync();
+      if (result.canceled) {
+        setPicked('canceled');
+        return;
+      }
+      const f = result.result;
+      const text = await f.text();
+      const first = text.split('\n')[0].slice(0, 80);
+      const name = await Downloads.nameAsync(f.uri);
+      setPicked(`${name} (${f.size} bytes) — ${first}`);
+      setErr('');
+    } catch (e) {
+      setErr(String(e));
+    }
+  };
+
+  return (
+    <View>
+      <Text style={s.h1}>Files</Text>
+      <Text style={s.lead}>
+        Download saves a small report where this device keeps downloads — the Download folder on Android, this
+        app's Documents on iOS. Upload opens the system file picker; pick a file, and the line under it says
+        what arrived.
+      </Text>
+      <Btn id="saveReportBtn" label="Download the report" onPress={saveReport} />
+      <Text testID="savedFile" style={s.mono}>saved: {saved}</Text>
+      <Btn id="pickFileBtn" label="Upload a file" onPress={pick} />
+      <Text testID="pickedFile" style={s.mono}>picked: {picked}</Text>
+      {err !== '' && <Text testID="filesError" style={s.note}>error: {err}</Text>}
+    </View>
+  );
+}
+
 function StorageScreen() {
   const [count, setCount] = useState(0);
   const [present, setPresent] = useState(false);
@@ -2434,6 +2503,13 @@ export default function App() {
           {back}
           <StorageScreen />
         </View>
+      )}
+
+      {screen === 'files' && (
+        <ScrollView contentContainerStyle={s.pad}>
+          {back}
+          <FilesScreen />
+        </ScrollView>
       )}
 
       {screen === 'battery' && (
