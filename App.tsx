@@ -166,11 +166,19 @@ page skips under prefers-reduced-motion — the only way a page can honor the se
 // says it too, and returned by window.pinchScale() for a check.
 const PINCH = `<!doctype html><html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<style>body{font:16px -apple-system,system-ui,sans-serif;margin:0;padding:16px}
-#scale{font-size:28px;font-weight:600}</style></head>
-<body><div id="scale">scale 1.00</div>
-<p>Pinch in and spread out anywhere on this page. The number above is the
-browser's own zoom level, read from visualViewport.</p>
+<style>body{font:16px -apple-system,system-ui,sans-serif;margin:0;padding:16px;min-height:100vh;
+box-sizing:border-box;display:flex;flex-direction:column;justify-content:center;align-items:center}
+#target{width:220px;height:220px;border:3px solid #3552FD;border-radius:12px;display:flex;
+align-items:center;justify-content:center;background-color:#fff;
+background-image:linear-gradient(#e3e6f5 1px,transparent 1px),linear-gradient(90deg,#e3e6f5 1px,transparent 1px);
+background-size:20px 20px}
+#scale{font-size:34px;font-weight:700;background:#fff;padding:2px 8px;border-radius:6px}
+p{text-align:center;max-width:300px}</style></head>
+<body><div id="target"><div id="scale">scale 1.00</div></div>
+<p>Pinch in and spread out anywhere on this page. The number in the box is
+the browser's own zoom level, read from visualViewport. It sits in the
+middle, where a pinch about the screen's center lands, so a picture taken
+after a zoom shows it magnified.</p>
 <script>
   function show() {
     document.getElementById('scale').textContent = 'scale ' + visualViewport.scale.toFixed(2);
