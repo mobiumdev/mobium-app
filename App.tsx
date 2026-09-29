@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import {AccessibilityInfo, ActionSheetIOS, Alert, Animated, Easing, KeyboardAvoidingView, PanResponder, Share, Switch} from 'react-native';
 import {WebView} from 'react-native-webview';
+import * as Battery from 'expo-battery';
 import * as Location from 'expo-location';
 import {File, Paths} from 'expo-file-system';
 import * as Notifications from 'expo-notifications';
@@ -272,6 +273,54 @@ const PLAIN = page('Plain page', `<p id="para">The quick brown fox.</p>${LEARN_M
 const WIDE = page('Wide page', `<p id="para">Laid out at 1200 CSS pixels.</p>${LEARN_MORE}`, 'width=1200');
 const SECOND = page('Second page', `<p id="para">A different page in a second WebView.</p>${LEARN_MORE}`);
 
+// WEB_STORAGE is the page app_cookies and app_storage are checked against. An
+// inline page has no origin — about:blank, or "null" — and a page with no
+// origin holds no cookies and no web storage, so every other page here makes
+// both tools refuse. This one is still inline, never fetched, but loaded with
+// a base URL, which gives it an origin of its own. The domain is under .test,
+// reserved for testing (RFC 2606): it cannot resolve, so it can never reach a
+// server, and nothing leaves the device.
+//
+// The page reports what it holds itself — every cookie and storage key it can
+// see, read again every second — so a check can tell a restore that reached
+// the page from one that only reported success. "Save a visit" writes one of
+// each, the way a page's own script would.
+const WEB_STORAGE_BASE = 'https://mobiumapp.test/';
+const WEB_STORAGE = page('Web storage', `
+<p id="origin"></p>
+<p>What this page holds, read again every second:</p>
+<pre id="storageBox" style="white-space:pre-wrap;background:#f2f2f7;padding:10px;border-radius:8px;font-size:13px"></pre>
+<button id="saveVisit">Save a visit</button>
+<script>
+  document.getElementById('origin').textContent = 'origin: ' + location.origin;
+  function keys(st) {
+    var out = [];
+    try { for (var i = 0; i < st.length; i++) { var k = st.key(i); out.push(k + '=' + st.getItem(k)); } }
+    catch (e) { return ['(unavailable: ' + e.name + ')']; }
+    return out.sort();
+  }
+  function cookies() { return document.cookie ? document.cookie.split('; ').sort() : []; }
+  window.storageState = function () {
+    return {origin: location.origin, cookies: cookies(), local: keys(localStorage), session: keys(sessionStorage)};
+  };
+  function show() {
+    var st = window.storageState();
+    document.getElementById('storageBox').textContent =
+      'cookies: ' + (st.cookies.join(', ') || 'none') + '\\n' +
+      'localStorage: ' + (st.local.join(', ') || 'none') + '\\n' +
+      'sessionStorage: ' + (st.session.join(', ') || 'none');
+  }
+  document.getElementById('saveVisit').onclick = function () {
+    var n = Number(localStorage.getItem('visits') || 0) + 1;
+    localStorage.setItem('visits', String(n));
+    sessionStorage.setItem('lastVisit', 'visit ' + n);
+    document.cookie = 'visited=yes; path=/; max-age=86400';
+    show();
+  };
+  show();
+  setInterval(show, 1000);
+</script>`);
+
 // FRAMES is one page holding frames of each kind a tool meets: a same-origin
 // frame (srcdoc), a frame nested inside it, and a cross-origin frame (a data:
 // URL is an opaque origin, so the page cannot see into it — no network or
@@ -316,7 +365,7 @@ bottom says which one the tap reached.</p>
   document.getElementById('frames').appendChild(cross);
 </script>`);
 
-type Screen = 'home' | 'webviewhub' | 'frames' | 'webview' | 'wide' | 'dual' | 'login' | 'otp' | 'secret' | 'location' | 'pager' | 'popup' | 'form' | 'gesturehub' | 'tappress' | 'drag' | 'flick' | 'pinch' | 'multitouch' | 'rotate' | 'doubletap' | 'motion' | 'crash' | 'storage' | 'dialogs' | 'obstruction' | 'a11y' | 'actionable' | 'webform' | 'layout';
+type Screen = 'home' | 'webviewhub' | 'frames' | 'webview' | 'wide' | 'dual' | 'login' | 'otp' | 'secret' | 'location' | 'pager' | 'popup' | 'form' | 'gesturehub' | 'tappress' | 'drag' | 'flick' | 'pinch' | 'multitouch' | 'rotate' | 'doubletap' | 'motion' | 'crash' | 'storage' | 'dialogs' | 'obstruction' | 'a11y' | 'actionable' | 'webform' | 'layout' | 'webstorage' | 'battery';
 
 const SCREENS: [Screen, string][] = [
   ['webviewhub', 'WebViews'],
@@ -334,6 +383,7 @@ const SCREENS: [Screen, string][] = [
   ['obstruction', 'Obstruction Demo'],
   ['a11y', 'Accessibility Demo'],
   ['layout', 'Layout Demo'],
+  ['battery', 'Battery Demo'],
 ];
 
 // The gesture witnesses, in the order of the touch-gesture charts mobium's
@@ -376,6 +426,11 @@ const WEBVIEW_SCREENS: [Screen, string, string][] = [
     'Fields in a page to type into: plain, email and multi-line ones, ones that must refuse text — ' +
     'read-only, aria-readonly and disabled — a password field, and a checkbox, which is not a text ' +
     'field at all. The page says what each one holds.'],
+  ['webstorage', 'Web storage',
+    'A page with an origin of its own, so it can hold cookies and web storage — every other page here is ' +
+    'inline HTML with no origin, which holds neither. Save a visit writes a cookie and a localStorage entry; ' +
+    'the box shows everything the page holds, read again every second, so a tool that saves, clears or ' +
+    'restores it can be checked against what the page itself sees.'],
   ['frames', 'Frames',
     'One page holding frames: one from its own origin, one nested inside that, and one from another ' +
     'origin. Tap each button and the line at the bottom says which frame the tap reached. Whether a ' +
@@ -394,11 +449,11 @@ function Btn({id, label, onPress, disabled = false}: {id: string; label: string;
   );
 }
 
-function Web({id, html, origins}: {id: string; html: string; origins?: string[]}) {
+function Web({id, html, origins, baseUrl}: {id: string; html: string; origins?: string[]; baseUrl?: string}) {
   return (
     <WebView
       testID={id}
-      source={{html}}
+      source={baseUrl ? {html, baseUrl} : {html}}
       originWhitelist={origins}
       // The whole point of this app: without this the WKWebView is invisible
       // to Remote Web Inspector on iOS 16.4+, and to CDP on Android.
@@ -1253,6 +1308,124 @@ function LayoutScreen() {
         onPress={() => setLast('narrow')} style={[s.target, {width: narrow, height: 60, marginTop: 16}]} />
       <Text testID="layoutWidth" style={s.note}>window {Math.round(width)}dp, narrow target {narrow}dp</Text>
       <Text testID="layoutLast" style={s.note}>last: {last}</Text>
+    </View>
+  );
+}
+
+// BatteryScreen is the observer app_battery had none of. mobium reads the
+// battery from outside — dumpsys on Android, the device's own report on iOS —
+// and until something on the device said what it saw, a level read back was
+// only mobium agreeing with itself. The app reads the same battery through
+// the platform's API, every second and on every change the platform
+// announces, and shows it as a battery drawn to the exact level and as text,
+// so a check can hold mobium's answer to the app's, and a person can see it.
+//
+// On an emulator the battery is the console's to set — `adb emu power
+// capacity 42`, `adb emu power status charging` — which is the control: the
+// drawing follows a level nobody could have guessed. An iOS simulator has no
+// battery, and says so: the platform reports its level as -1, shown as no
+// battery rather than as an empty one, and the screen stops reading.
+const BATTERY_STATES: Record<number, string> = {
+  [Battery.BatteryState.UNKNOWN]: 'unknown',
+  [Battery.BatteryState.UNPLUGGED]: 'unplugged',
+  [Battery.BatteryState.CHARGING]: 'charging',
+  [Battery.BatteryState.FULL]: 'full',
+};
+
+// The fill is drawn to the pixel: the width inside the border and padding,
+// times the level. A percentage width would be of the padded box, and wrong
+// by up to the padding.
+const BATTERY_WIDTH = 260, BATTERY_BORDER = 6, BATTERY_PAD = 6;
+const BATTERY_INNER = BATTERY_WIDTH - 2 * (BATTERY_BORDER + BATTERY_PAD);
+
+function BatteryScreen() {
+  const [level, setLevel] = useState<number | null>(null);
+  const [state, setState] = useState<Battery.BatteryState>(Battery.BatteryState.UNKNOWN);
+  const [lowPower, setLowPower] = useState<boolean | null>(null);
+  const [reads, setReads] = useState(0);
+  const [err, setErr] = useState('');
+
+  useEffect(() => {
+    let live = true;
+    let timer: ReturnType<typeof setInterval> | undefined;
+    const read = async () => {
+      try {
+        const [l, st, lp] = await Promise.all([
+          Battery.getBatteryLevelAsync(), Battery.getBatteryStateAsync(), Battery.isLowPowerModeEnabledAsync(),
+        ]);
+        if (!live) return;
+        setLevel(l);
+        setState(st);
+        setLowPower(lp);
+        setReads(n => n + 1);
+        // No battery — a simulator's -1 — is an answer, not a read still
+        // to come: polling on would count reads of nothing, which looked like
+        // a screen stuck reading.
+        if (l < 0 && timer !== undefined) {
+          clearInterval(timer);
+          timer = undefined;
+        }
+      } catch (e) {
+        setErr(String(e));
+      }
+    };
+    // A poll as well as the listeners: the reads counter is what tells a
+    // screen that is still reading from one that stopped.
+    timer = setInterval(read, 1000);
+    read();
+    const a = Battery.addBatteryLevelListener(({batteryLevel}) => live && setLevel(batteryLevel));
+    const b = Battery.addBatteryStateListener(({batteryState}) => live && setState(batteryState));
+    return () => {
+      live = false;
+      if (timer !== undefined) clearInterval(timer);
+      a.remove();
+      b.remove();
+    };
+  }, []);
+
+  const known = level !== null && level >= 0;
+  const none = level !== null && level < 0;
+  // The level as the platform gives it, 0 to 1, as a percentage with no more
+  // rounding than a tenth: Android reports whole percents, a real iPhone
+  // steps of five. Android's is a 32-bit float, so 42% arrives as
+  // 0.41999998688697815; the raw line shows six significant digits, which is
+  // every digit the platform meant.
+  const pct = known ? Math.round(level * 1000) / 10 : null;
+  const words = BATTERY_STATES[state] ?? 'unknown';
+  const fill = pct === null ? 'transparent' : pct > 50 ? '#34C759' : pct > 20 ? '#FFCC00' : '#FF3B30';
+  const said = none ? 'No battery' : pct === null ? 'Battery not read yet' : `Battery ${pct} percent, ${words}`;
+
+  return (
+    <View>
+      <Text style={s.h1}>Battery</Text>
+      <Text style={s.lead}>
+        What this device reports about its battery, drawn and in words, read again every second. mobium
+        battery reads the same battery from outside; on an emulator, adb emu power capacity changes it, and the
+        drawing follows. A simulator has no battery, and says so.
+      </Text>
+      <View style={s.batteryRow} testID="batteryGauge" accessible accessibilityLabel={said}>
+        <View style={s.batteryBody}>
+          <View style={[s.batteryFill, {width: BATTERY_INNER * (pct ?? 0) / 100, backgroundColor: fill}]} />
+          <Text style={none ? s.batteryNone : s.batteryText}>
+            {none ? 'No battery' : pct === null ? '…' : `${pct}%`}{words === 'charging' ? ' ⚡' : ''}
+          </Text>
+        </View>
+        <View style={s.batteryCap} />
+      </View>
+      <Text testID="batteryLevel" style={s.mono}>
+        level: {none ? 'none' : pct === null ? 'not read yet' : `${pct}%`}
+      </Text>
+      <Text testID="batteryRaw" style={s.note}>
+        raw: {level === null ? 'not read yet' : String(Number(level.toPrecision(6)))}
+      </Text>
+      <Text testID="batteryState" style={s.mono}>state: {words}</Text>
+      <Text testID="batteryLowPower" style={s.note}>
+        low power mode: {lowPower === null ? 'not read yet' : lowPower ? 'on' : 'off'}
+      </Text>
+      <Text testID="batteryReads" style={s.note}>
+        reads: {reads}{none ? ' — stopped: this device reports no battery (level -1), and there is nothing to watch' : ''}
+      </Text>
+      {err !== '' && <Text testID="batteryError" style={s.note}>error: {err}</Text>}
     </View>
   );
 }
@@ -2134,6 +2307,7 @@ export default function App() {
           neither, so both rendered empty on an iPhone 17 Pro simulator while
           Android, which does not apply the list to frames, drew them. */}
       {screen === 'frames' && <Web id="framesWebview" html={FRAMES} origins={['*']} />}
+      {screen === 'webstorage' && <Web id="storageWebview" html={WEB_STORAGE} baseUrl={WEB_STORAGE_BASE} />}
       {screen === 'actionable' && <Web id="actionWebview" html={ACTIONABLE} />}
       {screen === 'webform' && <Web id="formWebview" html={WEBFORM} />}
 
@@ -2254,6 +2428,13 @@ export default function App() {
         </View>
       )}
 
+      {screen === 'battery' && (
+        <ScrollView contentContainerStyle={s.pad}>
+          {back}
+          <BatteryScreen />
+        </ScrollView>
+      )}
+
       {screen === 'dialogs' && (
         <View style={s.fill}>
           <View style={s.padTop}>{back}</View>
@@ -2343,6 +2524,14 @@ const lightStyles = StyleSheet.create({
   label: {fontSize: 14, fontWeight: '600', color: ui.ink, marginBottom: 4},
   inputBad: {borderColor: '#b00'},
   mono: {fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', fontSize: 18, marginBottom: 8},
+  batteryRow: {flexDirection: 'row', alignItems: 'center', marginVertical: 24, alignSelf: 'center'},
+  batteryBody: {width: 260, height: 120, borderWidth: 6, borderColor: ui.ink, borderRadius: 18, padding: 6,
+    justifyContent: 'center', overflow: 'hidden'},
+  batteryFill: {position: 'absolute', left: 6, top: 6, bottom: 6, borderRadius: 10},
+  batteryText: {fontSize: 44, fontWeight: '700', textAlign: 'center', color: ui.ink},
+  batteryNone: {fontSize: 26, fontWeight: '600', textAlign: 'center', color: ui.ink},
+  batteryCap: {width: 14, height: 44, marginLeft: 4, borderTopRightRadius: 6, borderBottomRightRadius: 6,
+    backgroundColor: ui.ink},
   target: {
     height: 160,
     borderRadius: 10,
@@ -2418,6 +2607,10 @@ const darkStyles = StyleSheet.create({
   root: {...lightStyles.root, backgroundColor: DARK.bg},
   outcome: {...lightStyles.outcome, color: DARK.text},
   h1: {...lightStyles.h1, color: DARK.text},
+  batteryBody: {...lightStyles.batteryBody, borderColor: DARK.text},
+  batteryText: {...lightStyles.batteryText, color: DARK.text},
+  batteryNone: {...lightStyles.batteryNone, color: DARK.text},
+  batteryCap: {...lightStyles.batteryCap, backgroundColor: DARK.text},
   input: {...lightStyles.input, borderColor: DARK.line, color: DARK.text},
   otpBox: {...lightStyles.otpBox, borderColor: DARK.line, color: DARK.text},
   err: {...lightStyles.err, color: '#FF7B7B'},
