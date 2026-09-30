@@ -49,6 +49,12 @@
           "userTrackingPermission": "MobiumApp asks so a test can meet the prompt; it tracks nothing."
         }
       ],
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "MobiumApp asks for Face ID so a test can sign in with it; nothing is stored."
+        }
+      ],
       "./plugins/withoutPushEntitlement",
       "expo-notifications"
     ]

@@ -13,6 +13,7 @@ import * as Notifications from 'expo-notifications';
 import {requestTrackingPermissionsAsync} from 'expo-tracking-transparency';
 import {Camera} from 'expo-camera';
 import * as Clipboard from 'expo-clipboard';
+import * as LocalAuthentication from 'expo-local-authentication';
 import {ground, ui} from './theme';
 
 // Pages are shipped inline rather than fetched: a check that depends on a
@@ -374,7 +375,7 @@ bottom says which one the tap reached.</p>
   document.getElementById('frames').appendChild(cross);
 </script>`);
 
-type Screen = 'home' | 'webviewhub' | 'frames' | 'webview' | 'wide' | 'dual' | 'login' | 'otp' | 'secret' | 'location' | 'pager' | 'popup' | 'form' | 'gesturehub' | 'tappress' | 'drag' | 'flick' | 'pinch' | 'multitouch' | 'rotate' | 'doubletap' | 'motion' | 'crash' | 'storage' | 'dialogs' | 'obstruction' | 'a11y' | 'actionable' | 'webform' | 'layout' | 'webstorage' | 'battery' | 'files';
+type Screen = 'home' | 'webviewhub' | 'frames' | 'webview' | 'wide' | 'dual' | 'login' | 'otp' | 'secret' | 'location' | 'pager' | 'popup' | 'form' | 'gesturehub' | 'tappress' | 'drag' | 'flick' | 'pinch' | 'multitouch' | 'rotate' | 'doubletap' | 'motion' | 'crash' | 'storage' | 'dialogs' | 'obstruction' | 'a11y' | 'actionable' | 'webform' | 'layout' | 'webstorage' | 'battery' | 'files' | 'biometrics';
 
 const SCREENS: [Screen, string][] = [
   ['webviewhub', 'WebViews'],
@@ -394,6 +395,7 @@ const SCREENS: [Screen, string][] = [
   ['layout', 'Layout Demo'],
   ['battery', 'Battery Demo'],
   ['files', 'Files Demo'],
+  ['biometrics', 'Biometrics Demo'],
 ];
 
 // The gesture witnesses, in the order of the touch-gesture charts mobium's
@@ -1436,6 +1438,112 @@ function BatteryScreen() {
         reads: {reads}{none ? ' — stopped: this device reports no battery (level -1), and there is nothing to watch' : ''}
       </Text>
       {err !== '' && <Text testID="batteryError" style={s.note}>error: {err}</Text>}
+    </View>
+  );
+}
+
+// BiometricsScreen is the observer for app_biometric: a sign-in the platform
+// decides, and the app says what it was told. mobium enrolls a face or a
+// finger from outside and presents a matching or a non-matching one; nothing
+// outside the app can see whether the app's own prompt took it, so the app
+// reports the answer — success, or the platform's reason — on one line.
+//
+// What the device offers is read again every second, because enrollment
+// changes from outside while the app is on screen (on a simulator, with no
+// app switch at all), and a check has to see it arrive. The attempt counter
+// separates a new answer from the last one, and `bioPending` says a prompt is
+// up and waiting, so a finger presented to nobody can be told from one the
+// prompt refused.
+//
+// Biometrics only: no passcode to fall back to, so a face that does not
+// match comes back as a failure rather than as a passcode screen, and the
+// answer is the biometric's alone.
+const BIO_TYPES: Record<number, string> = {
+  [LocalAuthentication.AuthenticationType.FINGERPRINT]: 'fingerprint',
+  [LocalAuthentication.AuthenticationType.FACIAL_RECOGNITION]: 'face',
+  [LocalAuthentication.AuthenticationType.IRIS]: 'iris',
+};
+const BIO_LEVELS: Record<number, string> = {
+  [LocalAuthentication.SecurityLevel.NONE]: 'none',
+  [LocalAuthentication.SecurityLevel.SECRET]: 'passcode only',
+  [LocalAuthentication.SecurityLevel.BIOMETRIC_WEAK]: 'biometric (weak)',
+  [LocalAuthentication.SecurityLevel.BIOMETRIC_STRONG]: 'biometric (strong)',
+};
+
+function BiometricsScreen() {
+  const [hardware, setHardware] = useState<boolean | null>(null);
+  const [types, setTypes] = useState<string[]>([]);
+  const [enrolled, setEnrolled] = useState<boolean | null>(null);
+  const [level, setLevel] = useState('not read yet');
+  const [attempts, setAttempts] = useState(0);
+  const [pending, setPending] = useState(false);
+  const [outcome, setOutcome] = useState('none yet');
+  const [err, setErr] = useState('');
+
+  useEffect(() => {
+    let live = true;
+    const read = async () => {
+      try {
+        const [h, t, e, l] = await Promise.all([
+          LocalAuthentication.hasHardwareAsync(),
+          LocalAuthentication.supportedAuthenticationTypesAsync(),
+          LocalAuthentication.isEnrolledAsync(),
+          LocalAuthentication.getEnrolledLevelAsync(),
+        ]);
+        if (!live) return;
+        setHardware(h);
+        setTypes(t.map(x => BIO_TYPES[x] ?? String(x)));
+        setEnrolled(e);
+        setLevel(BIO_LEVELS[l] ?? String(l));
+      } catch (e) {
+        setErr(String(e));
+      }
+    };
+    const timer = setInterval(read, 1000);
+    read();
+    return () => { live = false; clearInterval(timer); };
+  }, []);
+
+  const signIn = async () => {
+    const n = attempts + 1;
+    setAttempts(n);
+    setPending(true);
+    setOutcome(`#${n}: waiting for the prompt`);
+    try {
+      const r = await LocalAuthentication.authenticateAsync({
+        promptMessage: 'Sign in to MobiumApp',
+        cancelLabel: 'Cancel',
+        disableDeviceFallback: true,
+        fallbackLabel: '',
+        biometricsSecurityLevel: 'strong',
+      });
+      setOutcome(r.success ? `#${n}: success` : `#${n}: failed (${r.error})${r.warning ? ' — ' + r.warning : ''}`);
+    } catch (e) {
+      setOutcome(`#${n}: error ${String(e)}`);
+    } finally {
+      setPending(false);
+    }
+  };
+
+  const yesNo = (v: boolean | null) => v === null ? 'not read yet' : v ? 'yes' : 'no';
+  return (
+    <View>
+      <Text style={s.h1}>Biometrics</Text>
+      <Text style={s.lead}>
+        Sign in with a face or a finger, and the line below says what the platform answered. mobium biometric
+        enrolls one from outside and presents a match or a non-match; only an emulator or a simulator can be
+        told either, and a real phone needs a real finger.
+      </Text>
+      <Text testID="bioHardware" style={s.mono}>
+        hardware: {yesNo(hardware)}{types.length ? ` (${types.join(', ')})` : ''}
+      </Text>
+      <Text testID="bioEnrolled" style={s.mono}>enrolled: {yesNo(enrolled)}</Text>
+      <Text testID="bioLevel" style={s.note}>security level: {level}</Text>
+      <Btn id="bioSignIn" label="Sign in with biometrics" onPress={signIn} disabled={pending} />
+      <Text testID="bioPending" style={s.note}>{pending ? 'prompt: up, waiting' : 'prompt: none'}</Text>
+      <Text testID="bioOutcome" style={s.mono}>outcome: {outcome}</Text>
+      <Text testID="bioAttempts" style={s.note}>attempts: {attempts}</Text>
+      {err !== '' && <Text testID="bioError" style={s.note}>error: {err}</Text>}
     </View>
   );
 }
@@ -2509,6 +2617,13 @@ export default function App() {
         <ScrollView contentContainerStyle={s.pad}>
           {back}
           <FilesScreen />
+        </ScrollView>
+      )}
+
+      {screen === 'biometrics' && (
+        <ScrollView contentContainerStyle={s.pad}>
+          {back}
+          <BiometricsScreen />
         </ScrollView>
       )}
 
