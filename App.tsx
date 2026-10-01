@@ -3,7 +3,7 @@ import {
   Image, PixelRatio, Platform, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text,
   TextInput, View, Pressable, useWindowDimensions,
 } from 'react-native';
-import {AccessibilityInfo, ActionSheetIOS, Alert, Animated, Easing, KeyboardAvoidingView, PanResponder, Share, Switch} from 'react-native';
+import {AccessibilityInfo, ActionSheetIOS, BackHandler, Alert, Animated, Easing, KeyboardAvoidingView, PanResponder, Share, Switch} from 'react-native';
 import {WebView} from 'react-native-webview';
 import * as Battery from 'expo-battery';
 import Downloads from './modules/downloads/src/DownloadsModule';
@@ -2433,10 +2433,24 @@ export default function App() {
   const [dark, setDark] = useState(false);
   s = (dark ? darkStyles : lightStyles) as typeof lightStyles;
 
+  // Where Back goes from each screen: the hub it was chosen from, or home.
+  const parent: Screen = IN_GESTURES.has(screen) ? 'gesturehub' : IN_WEBVIEWS.has(screen) ? 'webviewhub' : 'home';
   const back = (
-    <Btn id="backBtn" label="Back"
-      onPress={() => setScreen(IN_GESTURES.has(screen) ? 'gesturehub' : IN_WEBVIEWS.has(screen) ? 'webviewhub' : 'home')} />
+    <Btn id="backBtn" label="Back" onPress={() => setScreen(parent)} />
   );
+
+  // Android's back — the key, or the edge swipe in gesture navigation — goes
+  // where the Back button goes. Unhandled, it reached the activity, which
+  // finished: every back from a demo closed the app and reopened it at home.
+  // On home it is left to the system, which closes the app as Android does.
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (screen === 'home') return false;
+      setScreen(parent);
+      return true;
+    });
+    return () => sub.remove();
+  }, [screen, parent]);
 
   return (
     <SafeAreaView style={s.root}>
