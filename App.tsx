@@ -1211,8 +1211,8 @@ function FormScreen({dark, setDark}: {dark: boolean; setDark: (v: boolean) => vo
       </View>
 
       {/* A field that shows text and cannot be edited — the control for
-          typing into something that is not editable, which Playwright and
-          Vibium refuse before trying. */}
+          typing into something that is not editable, which Vibium refuses
+          before trying. */}
       <Text style={s.label}>Read-only</Text>
       <TextInput testID="readOnlyField" accessibilityLabel="read-only field" style={s.input}
         value="This field cannot be edited" editable={false} />
