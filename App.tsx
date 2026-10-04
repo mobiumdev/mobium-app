@@ -3,7 +3,7 @@ import {
   Image, PixelRatio, Platform, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text,
   TextInput, View, Pressable, useWindowDimensions,
 } from 'react-native';
-import {AccessibilityInfo, ActionSheetIOS, BackHandler, Alert, Animated, Easing, KeyboardAvoidingView, PanResponder, Share, Switch} from 'react-native';
+import {AccessibilityInfo, ActionSheetIOS, ActivityIndicator, BackHandler, FlatList, Alert, Animated, Easing, KeyboardAvoidingView, PanResponder, Share, Switch} from 'react-native';
 import {WebView} from 'react-native-webview';
 import * as Battery from 'expo-battery';
 import Downloads from './modules/downloads/src/DownloadsModule';
@@ -375,7 +375,7 @@ bottom says which one the tap reached.</p>
   document.getElementById('frames').appendChild(cross);
 </script>`);
 
-type Screen = 'home' | 'webviewhub' | 'frames' | 'webview' | 'wide' | 'dual' | 'login' | 'otp' | 'secret' | 'location' | 'pager' | 'popup' | 'form' | 'gesturehub' | 'tappress' | 'drag' | 'flick' | 'pinch' | 'multitouch' | 'rotate' | 'doubletap' | 'motion' | 'crash' | 'storage' | 'dialogs' | 'obstruction' | 'a11y' | 'actionable' | 'webform' | 'layout' | 'webstorage' | 'battery' | 'files' | 'biometrics';
+type Screen = 'home' | 'webviewhub' | 'frames' | 'webview' | 'wide' | 'dual' | 'login' | 'otp' | 'secret' | 'location' | 'pager' | 'popup' | 'form' | 'gesturehub' | 'tappress' | 'drag' | 'flick' | 'pinch' | 'multitouch' | 'rotate' | 'doubletap' | 'motion' | 'crash' | 'storage' | 'dialogs' | 'obstruction' | 'a11y' | 'actionable' | 'webform' | 'layout' | 'webstorage' | 'battery' | 'files' | 'biometrics' | 'feed';
 
 const SCREENS: [Screen, string][] = [
   ['webviewhub', 'WebViews'],
@@ -396,6 +396,7 @@ const SCREENS: [Screen, string][] = [
   ['battery', 'Battery Demo'],
   ['files', 'Files Demo'],
   ['biometrics', 'Biometrics Demo'],
+  ['feed', 'Feed Demo'],
 ];
 
 // The gesture witnesses, in the order of the touch-gesture charts mobium's
@@ -573,6 +574,77 @@ function PagerScreen() {
       <Text testID="pagerTapped" style={s.note}>
         tapped: {tapped === 0 ? 'none' : 'Card ' + tapped}
       </Text>
+    </View>
+  );
+}
+
+// FeedScreen is a list that grows as it is scrolled, as a timeline does: twenty
+// rows a page, the next page loaded a moment after the end is reached, with a
+// spinner below the last row while it loads. A swipe at the end of a page
+// moves nothing — the rows that will follow are not there yet — and a tool
+// that takes "the swipe moved nothing" for "the list has ended" stops there.
+// Mobium's scroll loop did exactly that check and nothing else, and Ice
+// Cubes' timeline never showed it, because its pages arrived before the next
+// swipe; iOS cannot slow a network from outside, so the delay is the app's.
+//
+// The feed truly ends after three pages, under "End of feed": the negative
+// control, a real end that must still read as one. feedState says what the
+// app holds, so a check can tell "not loaded yet" from "not there".
+const FEED_PAGE = 20;
+const FEED_PAGES = 3;
+
+function FeedScreen() {
+  const [rows, setRows] = useState(FEED_PAGE);
+  const [loading, setLoading] = useState(false);
+  const [delay, setDelay] = useState(2500);
+  const [tapped, setTapped] = useState(0);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
+  const done = rows >= FEED_PAGE * FEED_PAGES;
+  const more = () => {
+    if (loading || done) return;
+    setLoading(true);
+    timer.current = setTimeout(() => {
+      setRows(n => Math.min(n + FEED_PAGE, FEED_PAGE * FEED_PAGES));
+      setLoading(false);
+    }, delay);
+  };
+  const data = Array.from({length: rows}, (_, i) => i + 1);
+  return (
+    <View style={s.fill}>
+      <Text style={s.h1}>Feed</Text>
+      <View style={s.row}>
+        <Btn id="feedFast" label="Load in 0.3s" onPress={() => setDelay(300)} />
+        <Btn id="feedSlow" label="Load in 2.5s" onPress={() => setDelay(2500)} />
+      </View>
+      <Text testID="feedState" style={s.outcome}>
+        rows: {rows}, {loading ? 'loading' : done ? 'end' : 'idle'}, delay: {delay}ms
+        {tapped ? ', tapped: Row ' + tapped : ''}
+      </Text>
+      <FlatList
+        testID="feed"
+        style={s.fill}
+        data={data}
+        keyExtractor={n => String(n)}
+        onEndReached={more}
+        onEndReachedThreshold={0.05}
+        renderItem={({item}) => (
+          <Pressable testID={'feedRow' + item} accessibilityLabel={'Row ' + item} accessibilityRole="button"
+            style={s.feedRow} onPress={() => setTapped(item)}>
+            <Text style={s.cardText}>Row {item}</Text>
+          </Pressable>
+        )}
+        ListFooterComponent={
+          loading ? (
+            <View style={s.row}>
+              <ActivityIndicator testID="feedLoading" accessibilityLabel="Loading more" />
+              <Text style={s.note}> Loading more…</Text>
+            </View>
+          ) : done ? (
+            <Text testID="feedEnd" style={s.note}>End of feed</Text>
+          ) : null
+        }
+      />
     </View>
   );
 }
@@ -2677,6 +2749,13 @@ export default function App() {
         </View>
       )}
 
+      {screen === 'feed' && (
+        <View style={[s.pad, s.fill]}>
+          {back}
+          <FeedScreen />
+        </View>
+      )}
+
       {screen === 'pager' && (
         <View style={s.pad}>
           {back}
@@ -2787,6 +2866,7 @@ const lightStyles = StyleSheet.create({
     justifyContent: 'center',
   },
   cardText: {color: '#fff', fontSize: 20, fontWeight: '600'},
+  feedRow: {height: 64, marginBottom: 8, borderRadius: 10, backgroundColor: ui.accent, alignItems: 'center', justifyContent: 'center'},
   note: {marginTop: 12, color: '#555'},
   web: {flex: 1},
   motionPanel: {marginTop: 4},
