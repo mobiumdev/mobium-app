@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import {AccessibilityInfo, ActionSheetIOS, ActivityIndicator, BackHandler, FlatList, Alert, Animated, Easing, KeyboardAvoidingView, PanResponder, Share, Switch} from 'react-native';
 import {WebView} from 'react-native-webview';
+import Slider from '@react-native-community/slider';
 import * as Battery from 'expo-battery';
 import Downloads from './modules/downloads/src/DownloadsModule';
 import * as Location from 'expo-location';
@@ -375,7 +376,7 @@ bottom says which one the tap reached.</p>
   document.getElementById('frames').appendChild(cross);
 </script>`);
 
-type Screen = 'home' | 'webviewhub' | 'frames' | 'webview' | 'wide' | 'dual' | 'login' | 'otp' | 'secret' | 'location' | 'pager' | 'popup' | 'form' | 'gesturehub' | 'tappress' | 'drag' | 'flick' | 'pinch' | 'multitouch' | 'rotate' | 'doubletap' | 'motion' | 'crash' | 'storage' | 'dialogs' | 'obstruction' | 'a11y' | 'actionable' | 'webform' | 'layout' | 'webstorage' | 'battery' | 'files' | 'biometrics' | 'feed';
+type Screen = 'home' | 'webviewhub' | 'frames' | 'webview' | 'wide' | 'dual' | 'login' | 'otp' | 'secret' | 'location' | 'pager' | 'popup' | 'form' | 'gesturehub' | 'tappress' | 'drag' | 'flick' | 'pinch' | 'multitouch' | 'rotate' | 'doubletap' | 'motion' | 'crash' | 'storage' | 'dialogs' | 'obstruction' | 'a11y' | 'actionable' | 'webform' | 'layout' | 'webstorage' | 'battery' | 'files' | 'biometrics' | 'feed' | 'slider';
 
 const SCREENS: [Screen, string][] = [
   ['webviewhub', 'WebViews'],
@@ -397,6 +398,7 @@ const SCREENS: [Screen, string][] = [
   ['files', 'Files Demo'],
   ['biometrics', 'Biometrics Demo'],
   ['feed', 'Feed Demo'],
+  ['slider', 'Slider Demo'],
 ];
 
 // The gesture witnesses, in the order of the touch-gesture charts mobium's
@@ -645,6 +647,35 @@ function FeedScreen() {
           ) : null
         }
       />
+    </View>
+  );
+}
+
+// SliderScreen is a control whose state is a position rather than a word. A
+// slider is set by moving its thumb, and what the app makes of the position
+// is the app's own: a tool can only know where it landed by reading back.
+// Volume runs 0 to 100 in steps of ten, so a move that lands a step past its
+// target shows as the wrong number; Balance is continuous. Neither belongs to
+// the device, so moving them changes nothing a person owns — which a
+// Settings slider, brightness or text size, would. Each is labeled, so a
+// tool has a name to find it by, and sliderState says what the app holds and
+// how many changes it received.
+function SliderScreen() {
+  const [volume, setVolume] = useState(50);
+  const [balance, setBalance] = useState(0.5);
+  const [changes, setChanges] = useState(0);
+  return (
+    <View>
+      <Text style={s.h1}>Sliders</Text>
+      <Text testID="sliderState" style={s.outcome}>
+        volume: {volume}, balance: {balance.toFixed(2)}, changes: {changes}
+      </Text>
+      <Text style={s.note}>Volume, 0 to 100 in steps of 10</Text>
+      <Slider testID="volumeSlider" accessibilityLabel="Volume" minimumValue={0} maximumValue={100} step={10}
+        value={volume} onValueChange={v => { setVolume(Math.round(v)); setChanges(n => n + 1); }} />
+      <Text style={s.note}>Balance, 0 to 1, continuous</Text>
+      <Slider testID="balanceSlider" accessibilityLabel="Balance" minimumValue={0} maximumValue={1}
+        value={balance} onValueChange={v => { setBalance(v); setChanges(n => n + 1); }} />
     </View>
   );
 }
@@ -2746,6 +2777,13 @@ export default function App() {
         <View style={s.pad}>
           {back}
           <PopupScreen />
+        </View>
+      )}
+
+      {screen === 'slider' && (
+        <View style={s.pad}>
+          {back}
+          <SliderScreen />
         </View>
       )}
 

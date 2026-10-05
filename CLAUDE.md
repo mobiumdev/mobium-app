@@ -33,7 +33,7 @@ needs no Metro server and a check script can drive it cold.
 
 Mobium's end-to-end checks drive this app by `testID` — `mobium-app.sh`,
 `login.sh`, `dialogs.sh`, `obstruction.sh`, `web-actionability.sh`, `web-type.sh`, `gestures.sh`, `autowait.sh`, `keyboard.sh`,
-`source.sh`, `clear-data.sh`, `crashes.sh`, `biometric.sh`, `zoom.sh` and `feed.sh` under `docs/checks/`
+`source.sh`, `clear-data.sh`, `crashes.sh`, `biometric.sh`, `zoom.sh`, `feed.sh` and `slider.sh` under `docs/checks/`
 in the Mobium repository.
 
 - **Never rename or remove a `testID`** without changing those checks in the
