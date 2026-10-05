@@ -346,16 +346,27 @@ bottom says which one the tap reached.</p>
 <button id="pageBtn">A button on the page itself</button>
 <div id="frames"></div>
 <p id="frameOutcome">last tap: none</p>
+<p id="frameTyped">typed: nothing</p>
 <style>iframe{display:block;width:100%;height:130px;border:1px solid #bbb;border-radius:8px;margin:8px 0}</style>
 <script>
   function say(where) { document.getElementById('frameOutcome').textContent = 'last tap: ' + where; }
-  window.addEventListener('message', function (e) { if (e.data && e.data.frameTap) say(e.data.frameTap); });
+  window.addEventListener('message', function (e) {
+    if (e.data && e.data.frameTap) say(e.data.frameTap);
+    if (e.data && typeof e.data.frameTyped === 'string')
+      document.getElementById('frameTyped').textContent = 'typed: ' + e.data.frameTyped;
+  });
   document.getElementById('pageBtn').onclick = function () { say('the page'); };
-  function frameDoc(id, text, who) {
+  // A frame's document: a line, a button, and — given a field id — a text
+  // field whose contents are sent to the page as they change, the way a
+  // payment provider's card field sits in a frame of its own.
+  function frameDoc(id, text, who, field) {
+    var input = field ? ' <input id="' + field + '" placeholder="Card number" style="width:9em">' : '';
+    var typed = field ? 'document.getElementById("' + field + '").oninput = function (e) {' +
+      ' top.postMessage({frameTyped: e.target.value}, "*"); };' : '';
     return '<!doctype html><html><body style="font:15px -apple-system,system-ui,sans-serif;margin:8px">' +
-      '<p style="margin:0 0 6px">' + text + '</p><button id="' + id + '">Tap me</button>' +
+      '<p style="margin:0 0 6px">' + text + '</p><button id="' + id + '">Tap me</button>' + input +
       '<scr' + 'ipt>document.getElementById("' + id + '").onclick = function () {' +
-      ' top.postMessage({frameTap: "' + who + '"}, "*"); };</scr' + 'ipt></body></html>';
+      ' top.postMessage({frameTap: "' + who + '"}, "*"); };' + typed + '</scr' + 'ipt></body></html>';
   }
   var same = document.createElement('iframe');
   same.id = 'sameFrame';
@@ -372,7 +383,7 @@ bottom says which one the tap reached.</p>
   var cross = document.createElement('iframe');
   cross.id = 'crossFrame';
   cross.src = 'data:text/html,' + encodeURIComponent(
-    frameDoc('crossBtn', 'A cross-origin frame (a data: URL): the page cannot see into it.', 'the cross-origin frame'));
+    frameDoc('crossBtn', 'A cross-origin frame (a data: URL): the page cannot see into it.', 'the cross-origin frame', 'crossField'));
   document.getElementById('frames').appendChild(cross);
 </script>`);
 
