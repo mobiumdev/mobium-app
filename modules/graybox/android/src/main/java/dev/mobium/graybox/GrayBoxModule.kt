@@ -7,6 +7,8 @@ import android.view.Window
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import java.util.WeakHashMap
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 // GrayBox is Mobium's gray-box library on Android: the app says when it
 // starts and finishes work, and each change is a line in logcat, under the
@@ -24,12 +26,21 @@ import java.util.WeakHashMap
 //   MOBIUM-GRAYBOX busy=1 tag=fetch   work started; 1 thing in flight
 //   MOBIUM-GRAYBOX busy=0 tag=fetch   that work finished, and is on screen
 //   MOBIUM-GRAYBOX lift               a finger came up
+//   MOBIUM-GRAYBOX still busy=1       every half second while work is in
+//                                     flight, from a native timer: busy is a
+//                                     lease, and an app that stops renewing
+//                                     it (crashed, killed) is not waited on
+//   MOBIUM-GRAYBOX away / back        the app left the foreground / returned
 class GrayBoxModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("GrayBox")
 
     OnCreate { GrayBox.attach(appContext.currentActivity) }
-    OnActivityEntersForeground { GrayBox.attach(appContext.currentActivity) }
+    OnActivityEntersForeground {
+      GrayBox.attach(appContext.currentActivity)
+      GrayBox.lifecycle("back")
+    }
+    OnActivityEntersBackground { GrayBox.lifecycle("away") }
 
     Function("busy") { tag: String -> GrayBox.change(1, tag) }
     Function("idle") { tag: String -> GrayBox.change(-1, tag) }
@@ -40,6 +51,7 @@ object GrayBox {
   private const val TAG = "MobiumGrayBox"
   @Volatile private var enabled = false
   private var count = 0
+  private var started = false
   private val watched = WeakHashMap<Window, Boolean>()
 
   fun attach(activity: Activity?) {
@@ -48,6 +60,7 @@ object GrayBox {
       if (!activity.intent.getBooleanExtra("MobiumGrayBox", false)) return
       enabled = true
       write("on")
+      startBeat()
     }
     activity.runOnUiThread { watch(activity.window) }
   }
@@ -57,6 +70,23 @@ object GrayBox {
     if (!enabled) return
     count = maxOf(0, count + by)
     write("busy=$count tag=${tag.trim().replace(Regex("\\s+"), "_")}")
+  }
+
+  fun lifecycle(what: String) {
+    if (enabled) write(what)
+  }
+
+  // startBeat restates the count every half second while work is in
+  // flight, from a thread of its own, so a blocked JavaScript thread still
+  // renews the lease and a dead process stops renewing it.
+  @Synchronized
+  private fun startBeat() {
+    if (started) return
+    started = true
+    Executors.newSingleThreadScheduledExecutor().scheduleAtFixedRate({
+      val n = synchronized(this) { count }
+      if (n > 0) write("still busy=$n")
+    }, 500, 500, TimeUnit.MILLISECONDS)
   }
 
   fun write(what: String) {
