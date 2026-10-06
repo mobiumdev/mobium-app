@@ -3,7 +3,7 @@ import {
   Image, PixelRatio, Platform, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text,
   TextInput, View, Pressable, useWindowDimensions,
 } from 'react-native';
-import {AccessibilityInfo, ActionSheetIOS, ActivityIndicator, BackHandler, FlatList, Alert, Animated, Easing, KeyboardAvoidingView, PanResponder, Share, Switch} from 'react-native';
+import {AccessibilityInfo, ActionSheetIOS, ActivityIndicator, BackHandler, FlatList, Alert, Animated, Easing, KeyboardAvoidingView, PanResponder, Share, Switch, ToastAndroid} from 'react-native';
 import {WebView} from 'react-native-webview';
 import Slider from '@react-native-community/slider';
 import * as Battery from 'expo-battery';
@@ -2645,6 +2645,36 @@ export default function App() {
   // where the Back button goes. Unhandled, it reached the activity, which
   // finished: every back from a demo closed the app and reopened it at home.
   // On home it is left to the system, which closes the app as Android does.
+  // Gray-box hooks a test can call by name with `mobium hook`: MobiumApp is
+  // a test app, so it registers them always; they are reachable only in a
+  // gray-box launch. raiseToast shows its message in a toast the app draws
+  // (testID hookToast), on Android as a system toast too; screen answers
+  // with the screen showing; signIn sets up a signed-in session without the
+  // Login Demo's form.
+  const [toast, setToast] = useState('');
+  const toastSeq = useRef(0);
+  const screenRef = useRef(screen);
+  screenRef.current = screen;
+  useEffect(() => {
+    GrayBox.register('raiseToast', message => {
+      const text = message ?? '';
+      // Each toast clears only itself: the same message raised twice is
+      // two toasts, and the first one's timer must not take the second down.
+      const seq = ++toastSeq.current;
+      setToast(text);
+      if (Platform.OS === 'android') ToastAndroid.show(text, ToastAndroid.SHORT);
+      setTimeout(() => { if (toastSeq.current === seq) setToast(''); }, 4000);
+      return 'shown';
+    });
+    GrayBox.register('screen', () => screenRef.current);
+    GrayBox.register('signIn', username => {
+      if (!username) throw new Error('signIn needs a username');
+      setLoggedInAs(username);
+      setScreen('secret');
+      return `signed in as ${username}`;
+    });
+  }, []);
+
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
       if (screen === 'home') return false;
@@ -2921,6 +2951,11 @@ export default function App() {
           <Text testID="secretText" style={s.lead}>You are logged in.</Text>
           <Btn id="logoutBtn" label="Log Out" onPress={() => { setLoggedInAs(''); setScreen('login'); }} />
         </View>
+      )}
+      {toast !== '' && (
+        <Text testID="hookToast" accessibilityLiveRegion="polite" style={{position: 'absolute', left: 24, right: 24, top: 96, padding: 16, borderRadius: 12, backgroundColor: '#141A21', color: '#EDEAE3', fontSize: 16, textAlign: 'center'}}>
+          {toast}
+        </Text>
       )}
     </SafeAreaView>
   );
