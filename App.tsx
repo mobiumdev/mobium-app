@@ -8,6 +8,7 @@ import {WebView} from 'react-native-webview';
 import Slider from '@react-native-community/slider';
 import * as Battery from 'expo-battery';
 import Downloads from './modules/downloads/src/DownloadsModule';
+import GrayBox from './modules/graybox/src/GrayBoxModule';
 import * as Location from 'expo-location';
 import {File, Paths} from 'expo-file-system';
 import * as Notifications from 'expo-notifications';
@@ -387,7 +388,7 @@ bottom says which one the tap reached.</p>
   document.getElementById('frames').appendChild(cross);
 </script>`);
 
-type Screen = 'home' | 'webviewhub' | 'frames' | 'webview' | 'wide' | 'dual' | 'login' | 'otp' | 'secret' | 'location' | 'pager' | 'popup' | 'form' | 'gesturehub' | 'tappress' | 'drag' | 'flick' | 'pinch' | 'multitouch' | 'rotate' | 'doubletap' | 'motion' | 'crash' | 'storage' | 'dialogs' | 'obstruction' | 'a11y' | 'actionable' | 'webform' | 'layout' | 'webstorage' | 'battery' | 'files' | 'biometrics' | 'feed' | 'slider';
+type Screen = 'home' | 'webviewhub' | 'frames' | 'webview' | 'wide' | 'dual' | 'login' | 'otp' | 'secret' | 'location' | 'pager' | 'popup' | 'form' | 'gesturehub' | 'tappress' | 'drag' | 'flick' | 'pinch' | 'multitouch' | 'rotate' | 'doubletap' | 'motion' | 'crash' | 'storage' | 'dialogs' | 'obstruction' | 'a11y' | 'actionable' | 'webform' | 'layout' | 'webstorage' | 'battery' | 'files' | 'biometrics' | 'feed' | 'slider' | 'busy';
 
 const SCREENS: [Screen, string][] = [
   ['webviewhub', 'WebViews'],
@@ -410,6 +411,7 @@ const SCREENS: [Screen, string][] = [
   ['biometrics', 'Biometrics Demo'],
   ['feed', 'Feed Demo'],
   ['slider', 'Slider Demo'],
+  ['busy', 'Busy Demo'],
 ];
 
 // The gesture witnesses, in the order of the touch-gesture charts mobium's
@@ -671,6 +673,68 @@ function FeedScreen() {
 // Settings slider, brightness or text size, would. Each is labeled, so a
 // tool has a name to find it by, and sliderState says what the app holds and
 // how many changes it received.
+// BusyScreen is the Busy Demo, the control for Mobium's gray box: work that
+// finishes after the screen looks finished. Both buttons start the same
+// work, 0.4 to 1.6 seconds, and bring a new generation of rows. Refresh
+// shows it — the rows give way to a spinner — and Refresh quietly does not:
+// the old rows stay, tappable, until the new ones replace them.
+//
+// A row says whether the one tapped was current: its generation is the
+// latest and no work was pending. A tool that waits only for what it can see
+// taps a stale row after a quiet refresh; that is the failure this isolates,
+// and Refresh is its control, where waiting for the rows is enough.
+//
+// The app tells GrayBox when work starts, and that it has finished only once
+// the new rows are rendered, so idle means "done and on screen".
+function BusyScreen() {
+  const [gen, setGen] = useState(1);
+  const [loading, setLoading] = useState(false);
+  const [outcome, setOutcome] = useState('nothing tapped yet');
+  const latest = useRef(1);
+  const pending = useRef(0);
+  const finished = useRef<string[]>([]);
+  useEffect(() => {
+    while (finished.current.length) {
+      pending.current -= 1;
+      GrayBox.idle(finished.current.shift()!);
+    }
+  }, [gen]);
+  const refresh = (visible: boolean) => {
+    const tag = visible ? 'refresh' : 'quiet';
+    pending.current += 1;
+    GrayBox.busy(tag);
+    if (visible) setLoading(true);
+    setTimeout(() => {
+      latest.current += 1;
+      finished.current.push(tag);
+      setLoading(false);
+      setGen(latest.current);
+    }, 400 + Math.random() * 1200);
+  };
+  const tap = (row: string, rendered: number) => {
+    const current = rendered === latest.current && pending.current === 0;
+    setOutcome(`row ${row}, generation ${rendered}: ${current ? 'current' : 'stale'}`);
+  };
+  return (
+    <View>
+      <Text style={s.h1}>Busy</Text>
+      <Text testID="busyOutcome" style={s.outcome}>{outcome}</Text>
+      <Text style={s.note}>Both refresh the rows after 0.4 to 1.6 s. Refresh shows a spinner meanwhile; Refresh quietly leaves the old rows up.</Text>
+      <Btn id="busyRefresh" label="Refresh" onPress={() => refresh(true)} />
+      <Btn id="busyQuiet" label="Refresh quietly" onPress={() => refresh(false)} />
+      {loading ? (
+        <ActivityIndicator testID="busySpinner" accessibilityLabel="Loading" />
+      ) : (
+        ['A', 'B', 'C'].map(r => (
+          <Pressable key={r} testID={'busyRow' + r} accessibilityRole="button" style={s.row} onPress={() => tap(r, gen)}>
+            <Text>Row {r} · generation {gen}</Text>
+          </Pressable>
+        ))
+      )}
+    </View>
+  );
+}
+
 function SliderScreen() {
   const [volume, setVolume] = useState(50);
   const [balance, setBalance] = useState(0.5);
@@ -2795,6 +2859,13 @@ export default function App() {
         <View style={s.pad}>
           {back}
           <SliderScreen />
+        </View>
+      )}
+
+      {screen === 'busy' && (
+        <View style={s.pad}>
+          {back}
+          <BusyScreen />
         </View>
       )}
 
