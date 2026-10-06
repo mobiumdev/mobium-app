@@ -2652,14 +2652,18 @@ export default function App() {
   // with the screen showing; signIn sets up a signed-in session without the
   // Login Demo's form.
   const [toast, setToast] = useState('');
+  const toastSeq = useRef(0);
   const screenRef = useRef(screen);
   screenRef.current = screen;
   useEffect(() => {
     GrayBox.register('raiseToast', message => {
       const text = message ?? '';
+      // Each toast clears only itself: the same message raised twice is
+      // two toasts, and the first one's timer must not take the second down.
+      const seq = ++toastSeq.current;
       setToast(text);
       if (Platform.OS === 'android') ToastAndroid.show(text, ToastAndroid.SHORT);
-      setTimeout(() => setToast(t => (t === text ? '' : t)), 4000);
+      setTimeout(() => { if (toastSeq.current === seq) setToast(''); }, 4000);
       return 'shown';
     });
     GrayBox.register('screen', () => screenRef.current);
