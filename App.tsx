@@ -686,6 +686,12 @@ function FeedScreen() {
 //
 // The app tells GrayBox when work starts, and that it has finished only once
 // the new rows are rendered, so idle means "done and on screen".
+//
+// The rest are controls for the ways a gray box can wait wrongly:
+// Refresh from an alert starts the work from a button in the alert's own
+// window, where no lift is heard; Refresh twice runs two at once; Keep
+// polling is work that never finishes; Crash during a refresh dies holding
+// the work, so nothing ever says it ended.
 function BusyScreen() {
   const [gen, setGen] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -711,6 +717,20 @@ function BusyScreen() {
       setGen(latest.current);
     }, 400 + Math.random() * 1200);
   };
+  const [polling, setPolling] = useState(false);
+  const poll = () => {
+    if (polling) GrayBox.idle('poll');
+    else GrayBox.busy('poll');
+    setPolling(!polling);
+  };
+  const fromAlert = () => Alert.alert('Refresh the rows?', undefined, [
+    {text: 'Cancel', style: 'cancel'},
+    {text: 'Refresh', onPress: () => refresh(false)},
+  ]);
+  const crash = () => {
+    GrayBox.busy('doomed');
+    setTimeout(() => { throw new Error('The Busy Demo crashed during a refresh'); }, 300);
+  };
   const tap = (row: string, rendered: number) => {
     const current = rendered === latest.current && pending.current === 0;
     setOutcome(`row ${row}, generation ${rendered}: ${current ? 'current' : 'stale'}`);
@@ -722,6 +742,10 @@ function BusyScreen() {
       <Text style={s.note}>Both refresh the rows after 0.4 to 1.6 s. Refresh shows a spinner meanwhile; Refresh quietly leaves the old rows up.</Text>
       <Btn id="busyRefresh" label="Refresh" onPress={() => refresh(true)} />
       <Btn id="busyQuiet" label="Refresh quietly" onPress={() => refresh(false)} />
+      <Btn id="busyAlert" label="Refresh from an alert" onPress={fromAlert} />
+      <Btn id="busyTwice" label="Refresh twice" onPress={() => { refresh(false); refresh(false); }} />
+      <Btn id="busyPoll" label={polling ? 'Stop polling' : 'Keep polling'} onPress={poll} />
+      <Btn id="busyCrash" label="Crash during a refresh" onPress={crash} />
       {loading ? (
         <ActivityIndicator testID="busySpinner" accessibilityLabel="Loading" />
       ) : (

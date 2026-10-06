@@ -17,12 +17,18 @@ import os
 //   MOBIUM-GRAYBOX busy=1 tag=fetch   work started; 1 thing in flight
 //   MOBIUM-GRAYBOX busy=0 tag=fetch   that work finished, and is on screen
 //   MOBIUM-GRAYBOX lift               a finger came up
+//   MOBIUM-GRAYBOX still busy=1       every half second while work is in
+//                                     flight, from a native timer: busy is a
+//                                     lease, and an app that stops renewing
+//                                     it (crashed, suspended) is not waited on
+//   MOBIUM-GRAYBOX away / back        the app left the foreground / returned
 public class GrayBoxModule: Module {
   static let log = Logger(subsystem: "dev.mobium.graybox", category: "busy")
   static let enabled = UserDefaults.standard.bool(forKey: "MobiumGrayBox")
   static let lock = NSLock()
   static var count = 0
   static var watching = false
+  static let beat = DispatchSource.makeTimerSource(queue: DispatchQueue(label: "dev.mobium.graybox.still"))
 
   public func definition() -> ModuleDefinition {
     Name("GrayBox")
@@ -31,9 +37,24 @@ public class GrayBoxModule: Module {
       guard GrayBoxModule.enabled else { return }
       GrayBoxModule.write("on")
       DispatchQueue.main.async { GrayBoxModule.watchTouches() }
-      NotificationCenter.default.addObserver(
-        forName: UIWindow.didBecomeKeyNotification, object: nil, queue: .main
-      ) { _ in GrayBoxModule.watchTouches() }
+      let center = NotificationCenter.default
+      center.addObserver(forName: UIWindow.didBecomeKeyNotification, object: nil, queue: .main) { _ in
+        GrayBoxModule.watchTouches()
+      }
+      center.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main) { _ in
+        GrayBoxModule.write("away")
+      }
+      center.addObserver(forName: UIApplication.willEnterForegroundNotification, object: nil, queue: .main) { _ in
+        GrayBoxModule.write("back")
+      }
+      GrayBoxModule.beat.schedule(deadline: .now() + 0.5, repeating: 0.5)
+      GrayBoxModule.beat.setEventHandler {
+        GrayBoxModule.lock.lock()
+        let n = GrayBoxModule.count
+        GrayBoxModule.lock.unlock()
+        if n > 0 { GrayBoxModule.write("still busy=\(n)") }
+      }
+      GrayBoxModule.beat.resume()
     }
 
     Function("busy") { (tag: String) in GrayBoxModule.change(1, tag) }
