@@ -1,0 +1,9 @@
+{
+  "platforms": ["apple", "android"],
+  "apple": {
+    "modules": ["ToneModule"]
+  },
+  "android": {
+    "modules": ["dev.mobium.tone.ToneModule"]
+  }
+}
