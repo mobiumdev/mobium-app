@@ -9,6 +9,7 @@ import Slider from '@react-native-community/slider';
 import * as Battery from 'expo-battery';
 import Downloads from './modules/downloads/src/DownloadsModule';
 import GrayBox from './modules/graybox/src/GrayBoxModule';
+import Tone, {Segment} from './modules/tone/src/ToneModule';
 import * as Location from 'expo-location';
 import {File, Paths} from 'expo-file-system';
 import * as Notifications from 'expo-notifications';
@@ -388,7 +389,7 @@ bottom says which one the tap reached.</p>
   document.getElementById('frames').appendChild(cross);
 </script>`);
 
-type Screen = 'home' | 'webviewhub' | 'frames' | 'webview' | 'wide' | 'dual' | 'login' | 'otp' | 'secret' | 'location' | 'pager' | 'popup' | 'form' | 'gesturehub' | 'tappress' | 'drag' | 'flick' | 'pinch' | 'multitouch' | 'rotate' | 'doubletap' | 'motion' | 'crash' | 'storage' | 'dialogs' | 'obstruction' | 'a11y' | 'actionable' | 'webform' | 'layout' | 'webstorage' | 'battery' | 'files' | 'biometrics' | 'feed' | 'slider' | 'busy';
+type Screen = 'home' | 'webviewhub' | 'frames' | 'webview' | 'wide' | 'dual' | 'login' | 'otp' | 'secret' | 'location' | 'pager' | 'popup' | 'form' | 'gesturehub' | 'tappress' | 'drag' | 'flick' | 'pinch' | 'multitouch' | 'rotate' | 'doubletap' | 'motion' | 'crash' | 'storage' | 'dialogs' | 'obstruction' | 'a11y' | 'actionable' | 'webform' | 'layout' | 'webstorage' | 'battery' | 'files' | 'biometrics' | 'feed' | 'slider' | 'busy' | 'audio';
 
 const SCREENS: [Screen, string][] = [
   ['webviewhub', 'WebViews'],
@@ -412,6 +413,7 @@ const SCREENS: [Screen, string][] = [
   ['feed', 'Feed Demo'],
   ['slider', 'Slider Demo'],
   ['busy', 'Busy Demo'],
+  ['audio', 'Audio Demo'],
 ];
 
 // The gesture witnesses, in the order of the touch-gesture charts mobium's
@@ -755,6 +757,54 @@ function BusyScreen() {
           </Pressable>
         ))
       )}
+    </View>
+  );
+}
+
+// AudioScreen plays known sounds, so a tool that says what an app played
+// can be shown hearing it. Every sound is generated, at a quarter of full
+// volume: a 440 Hz tone for two seconds; 440, a second of silence, then 880,
+// for a tool that says when sound starts and stops or which pitch it was;
+// a tone until stopped (a minute at most); and a tone the platform is told
+// is an alarm rather than media, which only Android keeps.
+//
+// Silence is the negative control: a player that is started and plays two
+// seconds of zeros. A tool that reads "is something playing" from the
+// platform says yes to it; one that listens hears nothing. Telling those
+// apart is the point of the screen.
+//
+// audioState says what the app played and how it ended — "finished" once
+// the last sample has been heard, "stopped" when cut short.
+const AUDIO: {id: string; label: string; what: string; usage: string; segments: Segment[]}[] = [
+  {id: 'audioTone', label: 'Play 440 Hz for 2 s', what: '440 Hz for 2 s', usage: 'media', segments: [{hz: 440, ms: 2000}]},
+  {id: 'audioSequence', label: 'Play 440 Hz, a pause, then 880 Hz', what: '440 Hz 2 s, silence 1 s, 880 Hz 2 s', usage: 'media',
+    segments: [{hz: 440, ms: 2000}, {hz: 0, ms: 1000}, {hz: 880, ms: 2000}]},
+  {id: 'audioLoop', label: 'Play 440 Hz until stopped', what: '440 Hz until stopped', usage: 'media', segments: [{hz: 440, ms: 60000}]},
+  {id: 'audioSilent', label: 'Play silence for 2 s', what: 'silence for 2 s', usage: 'media', segments: [{hz: 0, ms: 2000}]},
+  {id: 'audioAlarm', label: Platform.OS === 'android' ? 'Play 660 Hz as an alarm for 2 s' : 'Play 660 Hz for 2 s (an alarm on Android only)',
+    what: '660 Hz for 2 s', usage: 'alarm', segments: [{hz: 660, ms: 2000}]},
+];
+
+function AudioScreen() {
+  const [state, setState] = useState('nothing played yet');
+  const play = async (a: typeof AUDIO[number]) => {
+    const as = Platform.OS === 'android' ? ` (${a.usage})` : '';
+    setState(`playing: ${a.what}${as}`);
+    try {
+      const whole = await Tone.playAsync(a.segments, a.usage);
+      if (whole) setState(`finished: ${a.what}${as}`);
+      else setState(cur => cur === `playing: ${a.what}${as}` ? `stopped: ${a.what}${as}` : cur);
+    } catch (e) {
+      setState(`failed: ${(e as Error).message}`);
+    }
+  };
+  return (
+    <View>
+      <Text style={s.h1}>Audio</Text>
+      <Text testID="audioState" style={s.outcome}>{state}</Text>
+      <Text style={s.note}>Generated sine tones at a quarter of full volume. Silence is a player that plays nothing: the platform says it is playing, and nothing is heard.</Text>
+      {AUDIO.map(a => <Btn key={a.id} id={a.id} label={a.label} onPress={() => play(a)} />)}
+      <Btn id="audioStop" label="Stop" onPress={() => Tone.stop()} />
     </View>
   );
 }
@@ -2920,6 +2970,13 @@ export default function App() {
         <View style={s.pad}>
           {back}
           <BusyScreen />
+        </View>
+      )}
+
+      {screen === 'audio' && (
+        <View style={s.pad}>
+          {back}
+          <AudioScreen />
         </View>
       )}
 
