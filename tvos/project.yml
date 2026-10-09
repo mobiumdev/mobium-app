@@ -1,0 +1,24 @@
+# MobiumTV for Apple TV: the tv/ app's screens on tvOS, for driving Apple TV
+# with Mobium. Generate the project with `xcodegen` after editing this file;
+# the generated MobiumTV.xcodeproj is committed, so building needs only Xcode.
+name: MobiumTV
+options:
+  bundleIdPrefix: dev.mobium
+  deploymentTarget:
+    tvOS: "17.0"
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    GENERATE_INFOPLIST_FILE: YES
+targets:
+  MobiumTV:
+    type: application
+    platform: tvOS
+    sources: [MobiumTV]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.mobium.tv
+        INFOPLIST_KEY_CFBundleDisplayName: MobiumTV
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
