@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="ink">#141826</color>
+    <color name="panel">#1F2440</color>
+    <color name="text">#F5F6FA</color>
+    <color name="muted">#B9C0D6</color>
+    <color name="focus">#8FE7EE</color>
+</resources>

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Every view a check reads or acts on has a resource id, so `map` and a
+     `testid=` locator name it the same on every run. -->
+<resources>
+    <item name="menu" type="id" />
+    <item name="openGrid" type="id" />
+    <item name="openFocusSelect" type="id" />
+    <item name="openRow" type="id" />
+    <item name="openDialog" type="id" />
+    <item name="openKeys" type="id" />
+    <item name="grid" type="id" />
+    <item name="focusState" type="id" />
+    <item name="selectState" type="id" />
+    <item name="onFocusTile" type="id" />
+    <item name="onSelectTile" type="id" />
+    <item name="panel" type="id" />
+    <item name="row" type="id" />
+    <item name="rowScroll" type="id" />
+    <item name="dialogButton" type="id" />
+    <item name="dialogOutcome" type="id" />
+    <item name="playerState" type="id" />
+    <item name="lastKey" type="id" />
+    <item name="keyCount" type="id" />
+</resources>

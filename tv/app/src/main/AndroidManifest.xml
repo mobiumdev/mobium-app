@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- A TV app that also installs on a phone or an emulator: neither the
+         leanback feature nor a touchscreen is required. -->
+    <uses-feature android:name="android.software.leanback" android:required="false" />
+    <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+
+    <application
+        android:label="@string/app_name"
+        android:icon="@mipmap/ic_launcher"
+        android:banner="@drawable/banner"
+        android:theme="@style/Theme.MobiumTV"
+        android:allowBackup="false">
+
+        <!-- Both launchers: LEANBACK_LAUNCHER is how a TV lists an app, and
+             what `mobium launch` resolves on Fire OS (CHALLENGES 209). -->
+        <activity android:name=".MainActivity" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+        <activity android:name=".FocusGridActivity" android:exported="false" />
+        <activity android:name=".FocusSelectActivity" android:exported="false" />
+        <activity android:name=".RowActivity" android:exported="false" />
+        <activity android:name=".DialogActivity" android:exported="false" />
+        <activity android:name=".KeysActivity" android:exported="false" />
+    </application>
+</manifest>

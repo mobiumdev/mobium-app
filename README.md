@@ -73,6 +73,13 @@ Flutter: Flutter draws its own widgets and publishes a semantics tree, a
 hierarchy shape React Native never produces. Mobium's `docs/checks/flutter.sh`
 drives it. Its README has the screen and how to build it.
 
+## A TV app beside it
+
+[`tv/`](tv/README.md) is MobiumTV, an app under test for Fire TV, Android TV
+and Google TV, driven with a remote: focus, select against touch, a row that
+scrolls with focus, a dialog, and media keys. Plain Android, built with
+Gradle; its README has the screens and how to install it on a TV.
+
 ## The demo account
 
 The Login Demo signs in with **`mobium`** / **`hunter2`**, and the screen shows
