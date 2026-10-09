@@ -66,6 +66,13 @@ a separate, opt-in assertion.
 needs a secure context, and the inline pages are served at an `about:blank`
 origin.
 
+## A Flutter app beside it
+
+[`flutter/`](flutter/README.md) is a second, smaller app under test, written in
+Flutter: Flutter draws its own widgets and publishes a semantics tree, a
+hierarchy shape React Native never produces. Mobium's `docs/checks/flutter.sh`
+drives it. Its README has the screen and how to build it.
+
 ## The demo account
 
 The Login Demo signs in with **`mobium`** / **`hunter2`**, and the screen shows
