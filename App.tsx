@@ -616,6 +616,12 @@ function FeedScreen() {
   const [loading, setLoading] = useState(false);
   const [delay, setDelay] = useState(2500);
   const [tapped, setTapped] = useState(0);
+  // Pull to refresh, as a real feed has: a pull at the top reloads the first
+  // page, and refreshes counts them, so a tool that scrolls up at the top
+  // can be seen pulling — a refresh is movement a scroll loop may take for
+  // progress.
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshes, setRefreshes] = useState(0);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
   const done = rows >= FEED_PAGE * FEED_PAGES;
@@ -638,6 +644,7 @@ function FeedScreen() {
       <Text testID="feedState" style={s.outcome}>
         rows: {rows}, {loading ? 'loading' : done ? 'end' : 'idle'}, delay: {delay}ms
         {tapped ? ', tapped: Row ' + tapped : ''}
+        {refreshes ? ', refreshes: ' + refreshes : ''}
       </Text>
       <FlatList
         testID="feed"
@@ -646,6 +653,12 @@ function FeedScreen() {
         keyExtractor={n => String(n)}
         onEndReached={more}
         onEndReachedThreshold={0.05}
+        refreshing={refreshing}
+        onRefresh={() => {
+          setRefreshing(true);
+          setRefreshes(n => n + 1);
+          setTimeout(() => { setRows(FEED_PAGE); setRefreshing(false); }, 600);
+        }}
         renderItem={({item}) => (
           <Pressable testID={'feedRow' + item} accessibilityLabel={'Row ' + item} accessibilityRole="button"
             style={s.feedRow} onPress={() => setTapped(item)}>
