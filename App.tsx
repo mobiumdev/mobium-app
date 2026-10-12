@@ -389,7 +389,7 @@ bottom says which one the tap reached.</p>
   document.getElementById('frames').appendChild(cross);
 </script>`);
 
-type Screen = 'home' | 'webviewhub' | 'frames' | 'webview' | 'wide' | 'dual' | 'login' | 'otp' | 'secret' | 'location' | 'pager' | 'popup' | 'form' | 'gesturehub' | 'tappress' | 'drag' | 'flick' | 'pinch' | 'multitouch' | 'rotate' | 'doubletap' | 'motion' | 'crash' | 'storage' | 'dialogs' | 'obstruction' | 'a11y' | 'actionable' | 'webform' | 'layout' | 'webstorage' | 'battery' | 'files' | 'biometrics' | 'feed' | 'slider' | 'busy' | 'audio';
+type Screen = 'home' | 'webviewhub' | 'frames' | 'webview' | 'wide' | 'dual' | 'login' | 'otp' | 'secret' | 'location' | 'pager' | 'popup' | 'form' | 'gesturehub' | 'tappress' | 'drag' | 'flick' | 'pinch' | 'multitouch' | 'rotate' | 'doubletap' | 'motion' | 'crash' | 'storage' | 'dialogs' | 'obstruction' | 'a11y' | 'actionable' | 'webform' | 'layout' | 'webstorage' | 'battery' | 'files' | 'biometrics' | 'feed' | 'table' | 'slider' | 'busy' | 'audio';
 
 const SCREENS: [Screen, string][] = [
   ['webviewhub', 'WebViews'],
@@ -411,6 +411,7 @@ const SCREENS: [Screen, string][] = [
   ['files', 'Files Demo'],
   ['biometrics', 'Biometrics Demo'],
   ['feed', 'Feed Demo'],
+  ['table', 'Table Demo'],
   ['slider', 'Slider Demo'],
   ['busy', 'Busy Demo'],
   ['audio', 'Audio Demo'],
@@ -661,6 +662,53 @@ function FeedScreen() {
             <Text testID="feedEnd" style={s.note}>End of feed</Text>
           ) : null
         }
+      />
+    </View>
+  );
+}
+
+// TableScreen is a list whose rows repeat their controls, the case a locator
+// written by hand cannot tell apart: every row has a More and a Delete with
+// the same test ID, as a real app's cells do, so only the row a control sits
+// in says which it is — mobium's `within`, or `nth`. Item 8 has no More, the
+// control for a scope that must not borrow the More of the row beside it, and
+// Items 1 to 3 carry a Starred switch. The titles are Item 1 to Item 30, so
+// text=Item 1 is also Items 10 to 19: a quoted, whole "Item 1" is not. The
+// list is long enough to scroll, and reuses its rows as it does. tableOutcome
+// says what was pressed, and in which row.
+const TABLE_ROWS = 30;
+function TableScreen() {
+  const [outcome, setOutcome] = useState('nothing yet');
+  const [starred, setStarred] = useState<Record<number, boolean>>({});
+  const rows = Array.from({length: TABLE_ROWS}, (_, i) => i + 1);
+  return (
+    <View style={s.fill}>
+      <Text style={s.h1}>Table</Text>
+      <Text testID="tableOutcome" style={s.outcome}>{outcome}</Text>
+      <FlatList
+        testID="table"
+        style={s.fill}
+        data={rows}
+        keyExtractor={n => String(n)}
+        renderItem={({item}) => (
+          <View testID={'tableRow' + item} style={s.tableRow}>
+            <Text style={s.tableTitle}>Item {item}</Text>
+            {item <= 3 && (
+              <Switch testID="rowStarred" accessibilityLabel="Starred" value={!!starred[item]}
+                onValueChange={v => { setStarred(st => ({...st, [item]: v})); setOutcome(`Starred: Item ${item} ${v ? 'on' : 'off'}`); }} />
+            )}
+            {item !== 8 && (
+              <Pressable testID="rowMore" accessibilityLabel="More" accessibilityRole="button" style={s.tableBtn}
+                onPress={() => setOutcome(`More: Item ${item}`)}>
+                <Text style={s.btnText}>More</Text>
+              </Pressable>
+            )}
+            <Pressable testID="rowDelete" accessibilityLabel="Delete" accessibilityRole="button" style={s.tableBtn}
+              onPress={() => setOutcome(`Delete: Item ${item}`)}>
+              <Text style={s.btnText}>Delete</Text>
+            </Pressable>
+          </View>
+        )}
       />
     </View>
   );
@@ -2987,6 +3035,13 @@ export default function App() {
         </View>
       )}
 
+      {screen === 'table' && (
+        <View style={[s.pad, s.fill]}>
+          {back}
+          <TableScreen />
+        </View>
+      )}
+
       {screen === 'pager' && (
         <View style={s.pad}>
           {back}
@@ -3103,6 +3158,9 @@ const lightStyles = StyleSheet.create({
   },
   cardText: {color: '#fff', fontSize: 20, fontWeight: '600'},
   feedRow: {height: 64, marginBottom: 8, borderRadius: 10, backgroundColor: ui.accent, alignItems: 'center', justifyContent: 'center'},
+  tableRow: {flexDirection: 'row', alignItems: 'center', minHeight: 64, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#ddd', gap: 8},
+  tableTitle: {flex: 1, fontSize: 18, color: ui.ink},
+  tableBtn: {paddingHorizontal: 14, paddingVertical: 10, borderRadius: 8, backgroundColor: ui.accent},
   note: {marginTop: 12, color: '#555'},
   web: {flex: 1},
   motionPanel: {marginTop: 4},
@@ -3135,6 +3193,7 @@ const darkStyles = StyleSheet.create({
   ...lightStyles,
   root: {...lightStyles.root, backgroundColor: DARK.bg},
   outcome: {...lightStyles.outcome, color: DARK.text},
+  tableTitle: {...lightStyles.tableTitle, color: DARK.text},
   h1: {...lightStyles.h1, color: DARK.text},
   batteryBody: {...lightStyles.batteryBody, borderColor: DARK.text},
   batteryText: {...lightStyles.batteryText, color: DARK.text},
