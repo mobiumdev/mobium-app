@@ -736,6 +736,20 @@ function TableScreen() {
 // Settings slider, brightness or text size, would. Each is labeled, so a
 // tool has a name to find it by, and sliderState says what the app holds and
 // how many changes it received.
+//
+// The three rows are three kinds of slider to a tool outside the app. On
+// iOS this library's slider reports itself as a plain view, with no trait
+// and no value, so Volume and Balance are the control for a slider nothing
+// can see. Level is the same slider made accessible the way a well-built
+// app does: the adjustable role, a value with its range, and the increment
+// and decrement a screen reader sends. Range is a web page's
+// <input type="range"> in a WebView, which a tool reaches through the page.
+const RANGE_HTML = `<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1">
+<style>body{font:16px -apple-system,Roboto,sans-serif;margin:8px}input{width:100%}</style>
+<label for="r">Range, 0 to 100 in steps of 10</label>
+<input id="r" data-testid="webRange" type="range" min="0" max="100" step="10" value="50">
+<p>range: <output data-testid="webRangeOut" id="o">50</output></p>
+<script>const r=document.getElementById('r'),o=document.getElementById('o');r.addEventListener('input',()=>{o.textContent=r.value});</script>`;
 // BusyScreen is the Busy Demo, the control for Mobium's gray box: work that
 // finishes after the screen looks finished. Both buttons start the same
 // work, 0.4 to 1.6 seconds, and bring a new generation of rows. Refresh
@@ -873,12 +887,14 @@ function AudioScreen() {
 function SliderScreen() {
   const [volume, setVolume] = useState(50);
   const [balance, setBalance] = useState(0.5);
+  const [level, setLevel] = useState(5);
   const [changes, setChanges] = useState(0);
+  const nudge = (by: number) => { setLevel(l => Math.min(10, Math.max(0, l + by))); setChanges(n => n + 1); };
   return (
     <View>
       <Text style={s.h1}>Sliders</Text>
       <Text testID="sliderState" style={s.outcome}>
-        volume: {volume}, balance: {balance.toFixed(2)}, changes: {changes}
+        volume: {volume}, balance: {balance.toFixed(2)}, level: {level}, changes: {changes}
       </Text>
       <Text style={s.note}>Volume, 0 to 100 in steps of 10</Text>
       <Slider testID="volumeSlider" accessibilityLabel="Volume" minimumValue={0} maximumValue={100} step={10}
@@ -886,6 +902,16 @@ function SliderScreen() {
       <Text style={s.note}>Balance, 0 to 1, continuous</Text>
       <Slider testID="balanceSlider" accessibilityLabel="Balance" minimumValue={0} maximumValue={1}
         value={balance} onValueChange={v => { setBalance(v); setChanges(n => n + 1); }} />
+      <Text style={s.note}>Level, 0 to 10 in steps of 1, accessible as adjustable</Text>
+      <Slider testID="levelSlider" accessibilityLabel="Level" accessibilityRole="adjustable"
+        accessibilityValue={{min: 0, max: 10, now: level}}
+        accessibilityActions={[{name: 'increment'}, {name: 'decrement'}]}
+        onAccessibilityAction={e => nudge(e.nativeEvent.actionName === 'increment' ? 1 : -1)}
+        minimumValue={0} maximumValue={10} step={1}
+        value={level} onValueChange={v => { setLevel(Math.round(v)); setChanges(n => n + 1); }} />
+      <View style={{height: 130}}>
+        <Web id="rangePage" html={RANGE_HTML} />
+      </View>
     </View>
   );
 }
