@@ -749,7 +749,31 @@ const RANGE_HTML = `<!doctype html><meta name="viewport" content="width=device-w
 <label for="r">Range, 0 to 100 in steps of 10</label>
 <input id="r" data-testid="webRange" type="range" min="0" max="100" step="10" value="50">
 <p>range: <output data-testid="webRangeOut" id="o">50</output></p>
-<script>const r=document.getElementById('r'),o=document.getElementById('o');r.addEventListener('input',()=>{o.textContent=r.value});</script>`;
+<script>const r=document.getElementById('r'),o=document.getElementById('o');r.addEventListener('input',()=>{o.textContent=r.value});</script>
+<style>.dual{position:relative;height:32px}.dual input{position:absolute;left:0;top:0;margin:0;width:100%;pointer-events:none;-webkit-appearance:none;appearance:none;background:transparent}
+.dual input::-webkit-slider-thumb{pointer-events:auto;-webkit-appearance:none;width:26px;height:26px;border-radius:13px;background:#2453a8}
+.dual::before{content:'';position:absolute;left:0;right:0;top:14px;height:4px;background:#ccd}
+.track{position:relative;height:32px;margin:6px 13px;touch-action:none}.track::before{content:'';position:absolute;left:0;right:0;top:14px;height:4px;background:#ccd}
+.thumb{position:absolute;top:3px;width:26px;height:26px;margin-left:-13px;border-radius:13px;background:#1f7a4d}</style>
+<p>Price, two thumbs: two ranges on one track</p>
+<div class="dual"><input data-testid="priceMin" aria-label="Minimum price" type="range" min="0" max="1000" step="50" value="200"><input data-testid="priceMax" aria-label="Maximum price" type="range" min="0" max="1000" step="50" value="800"></div>
+<p>price: <output data-testid="priceOut" id="po">200 to 800</output></p>
+<p>Hours, two thumbs: ARIA sliders on a drawn track</p>
+<div class="track" id="tr"><div class="thumb" id="h0" data-testid="hoursStart" role="slider" tabindex="0" aria-label="Start hour" aria-valuemin="0" aria-valuemax="24" aria-valuenow="9"></div><div class="thumb" id="h1" data-testid="hoursEnd" role="slider" tabindex="0" aria-label="End hour" aria-valuemin="0" aria-valuemax="24" aria-valuenow="17"></div></div>
+<p>hours: <output data-testid="hoursOut" id="ho">9 to 17</output></p>
+<script>
+const lo=document.querySelector('[data-testid=priceMin]'),hi=document.querySelector('[data-testid=priceMax]'),po=document.getElementById('po');
+const price=()=>{if(+lo.value>+hi.value){if(document.activeElement===hi)hi.value=lo.value;else lo.value=hi.value}po.textContent=lo.value+' to '+hi.value};
+lo.addEventListener('input',price);hi.addEventListener('input',price);
+const tr=document.getElementById('tr'),hs=[document.getElementById('h0'),document.getElementById('h1')],ho=document.getElementById('ho');
+const put=(i,v)=>{v=Math.round(Math.max(0,Math.min(24,v)));if(i===0)v=Math.min(v,+hs[1].getAttribute('aria-valuenow'));else v=Math.max(v,+hs[0].getAttribute('aria-valuenow'));
+  hs[i].setAttribute('aria-valuenow',v);hs[i].setAttribute('aria-valuetext',v+':00');hs[i].style.left=(v/24*100)+'%';
+  ho.textContent=hs[0].getAttribute('aria-valuenow')+' to '+hs[1].getAttribute('aria-valuenow')};
+put(0,9);put(1,17);
+hs.forEach((h,i)=>{h.addEventListener('keydown',e=>{const n=+h.getAttribute('aria-valuenow');if(e.key==='ArrowRight'||e.key==='ArrowUp'){put(i,n+1);e.preventDefault()}if(e.key==='ArrowLeft'||e.key==='ArrowDown'){put(i,n-1);e.preventDefault()}});
+  h.addEventListener('pointerdown',e=>{h.setPointerCapture(e.pointerId);const mv=ev=>{const b=tr.getBoundingClientRect();put(i,(ev.clientX-b.left)/b.width*24)};
+    h.addEventListener('pointermove',mv);h.addEventListener('pointerup',()=>h.removeEventListener('pointermove',mv),{once:true})})});
+</script>`;
 // BusyScreen is the Busy Demo, the control for Mobium's gray box: work that
 // finishes after the screen looks finished. Both buttons start the same
 // work, 0.4 to 1.6 seconds, and bring a new generation of rows. Refresh
@@ -909,7 +933,7 @@ function SliderScreen() {
         onAccessibilityAction={e => nudge(e.nativeEvent.actionName === 'increment' ? 1 : -1)}
         minimumValue={0} maximumValue={10} step={1}
         value={level} onValueChange={v => { setLevel(Math.round(v)); setChanges(n => n + 1); }} />
-      <View style={{height: 130}}>
+      <View style={{height: 360}}>
         <Web id="rangePage" html={RANGE_HTML} />
       </View>
     </View>
