@@ -56,4 +56,4 @@ later.
 
 ## License
 
-MIT, as the rest of MobiumApp.
+Apache License 2.0, as the rest of MobiumApp.

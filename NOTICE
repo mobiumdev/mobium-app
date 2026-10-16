@@ -1,0 +1,15 @@
+MobiumApp
+Copyright 2026 Lana Begunova
+
+This product is licensed under the Apache License, Version 2.0 (LICENSE).
+Before 2026-10-16 it was MIT licensed, and what was published under MIT
+stays available under MIT.
+
+The local Expo modules in modules/downloads, modules/graybox and modules/tone
+were created from Expo's create-expo-module template, by 650 Industries, Inc.
+(aka Expo), under the MIT License. Each keeps that license in its LICENSE
+file, as the MIT License requires.
+
+tv/gradle/wrapper/gradle-wrapper.jar and tv/gradlew are the Gradle Wrapper,
+from Gradle (https://gradle.org), licensed under the Apache License,
+Version 2.0.

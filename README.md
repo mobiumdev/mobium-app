@@ -109,4 +109,5 @@ The bundle identifier and package are both `dev.mobium.mobiumapp`.
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+Apache License 2.0 — see [LICENSE](LICENSE) and [NOTICE](NOTICE). MIT before
+2026-10-16; what was published then stays available under MIT.
