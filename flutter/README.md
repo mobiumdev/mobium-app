@@ -55,4 +55,4 @@ docs/checks/flutter.sh <android-serial | simulator-udid | iphone-udid>
 
 ## License
 
-MIT, as the rest of MobiumApp.
+Apache License 2.0, as the rest of MobiumApp.
