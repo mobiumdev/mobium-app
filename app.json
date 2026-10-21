@@ -11,7 +11,10 @@
       "bundleIdentifier": "dev.mobium.mobiumapp",
       "infoPlist": {
         "UIFileSharingEnabled": true,
-        "LSSupportsOpeningDocumentsInPlace": true
+        "LSSupportsOpeningDocumentsInPlace": true,
+        "NSAppTransportSecurity": {
+          "NSAllowsLocalNetworking": true
+        }
       }
     },
     "android": {
@@ -56,6 +59,7 @@
         }
       ],
       "./plugins/withSceneLifecycle",
+      "./plugins/withNetworkSecurity",
       "./plugins/withoutPushEntitlement",
       "expo-notifications"
     ]
