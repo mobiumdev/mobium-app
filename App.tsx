@@ -394,7 +394,7 @@ bottom says which one the tap reached.</p>
   document.getElementById('frames').appendChild(cross);
 </script>`);
 
-type Screen = 'home' | 'webviewhub' | 'frames' | 'webview' | 'wide' | 'dual' | 'login' | 'otp' | 'secret' | 'location' | 'pager' | 'popup' | 'form' | 'gesturehub' | 'tappress' | 'drag' | 'flick' | 'pinch' | 'multitouch' | 'rotate' | 'doubletap' | 'motion' | 'crash' | 'storage' | 'dialogs' | 'obstruction' | 'a11y' | 'actionable' | 'webform' | 'layout' | 'webstorage' | 'battery' | 'files' | 'biometrics' | 'feed' | 'table' | 'slider' | 'busy' | 'audio' | 'network';
+type Screen = 'home' | 'webviewhub' | 'frames' | 'webview' | 'wide' | 'dual' | 'login' | 'otp' | 'secret' | 'location' | 'pager' | 'popup' | 'form' | 'gesturehub' | 'tappress' | 'drag' | 'flick' | 'pinch' | 'multitouch' | 'rotate' | 'doubletap' | 'motion' | 'crash' | 'storage' | 'dialogs' | 'obstruction' | 'a11y' | 'actionable' | 'webform' | 'layout' | 'webstorage' | 'battery' | 'files' | 'biometrics' | 'feed' | 'table' | 'slider' | 'busy' | 'audio' | 'network' | 'spoken';
 
 const SCREENS: [Screen, string][] = [
   ['webviewhub', 'WebViews'],
@@ -421,6 +421,7 @@ const SCREENS: [Screen, string][] = [
   ['busy', 'Busy Demo'],
   ['audio', 'Audio Demo'],
   ['network', 'Network Demo'],
+  ['spoken', 'Screen Reader Demo'],
 ];
 
 // The gesture witnesses, in the order of the touch-gesture charts mobium's
@@ -2350,6 +2351,67 @@ function A11yScreen() {
   );
 }
 
+// SpokenScreen is built to be spoken wrong: each row is a control a screen
+// reader user meets as broken, beside its twin built right, so an audit or a
+// screen reader's speech gives each finding once and the twins give none.
+// spokenOutcome says which control was pressed, so a tap that reached the
+// wrong one is told apart.
+function SpokenScreen() {
+  const [outcome, setOutcome] = useState('nothing yet');
+  const [quiet, setQuiet] = useState(0);
+  const [live, setLive] = useState(0);
+  const press = (what: string) => () => setOutcome(what);
+  const pair = (id: string, label: string, caption: string) => (
+    <Pressable testID={id} accessibilityRole="button" accessibilityLabel={label}
+      style={[s.btn, s.spokenCell]} onPress={press(id)}>
+      <Text style={s.btnText}>{caption}</Text>
+    </Pressable>
+  );
+  return (
+    <ScrollView contentContainerStyle={s.dialogList}>
+      <Text style={s.lead}>
+        Each row is a control built wrong for a screen reader, on the left,
+        beside the same control built right.
+      </Text>
+      <Text testID="spokenOutcome" style={s.outcome}>pressed: {outcome}</Text>
+
+      <Text style={s.label}>An icon with no name</Text>
+      <View style={s.spokenRow}>
+        <Pressable testID="iconUnnamed" accessibilityRole="button"
+          style={[s.btn, s.spokenCell]} onPress={press('iconUnnamed')} />
+        <Pressable testID="iconNamed" accessibilityRole="button" accessibilityLabel="Settings"
+          style={[s.btn, s.spokenCell]} onPress={press('iconNamed')} />
+      </View>
+
+      <Text style={s.label}>A name that says its kind</Text>
+      <View style={s.spokenRow}>
+        {pair('saveRedundant', 'Save button', 'Save')}
+        {pair('saveNamed', 'Save', 'Save')}
+      </View>
+
+      <Text style={s.label}>A name without the words shown</Text>
+      <View style={s.spokenRow}>
+        {pair('sendMismatch', 'Submit form', 'Send')}
+        {pair('sendMatch', 'Send message', 'Send')}
+      </View>
+
+      <Text style={s.label}>A status that changes without a word</Text>
+      <View style={s.spokenRow}>
+        <Pressable testID="addQuiet" accessibilityRole="button" accessibilityLabel="Add quietly"
+          style={[s.btn, s.spokenCell]} onPress={() => setQuiet(n => n + 1)}>
+          <Text style={s.btnText}>Add quietly</Text>
+        </Pressable>
+        <Pressable testID="addLive" accessibilityRole="button" accessibilityLabel="Add aloud"
+          style={[s.btn, s.spokenCell]} onPress={() => setLive(n => n + 1)}>
+          <Text style={s.btnText}>Add aloud</Text>
+        </Pressable>
+      </View>
+      <Text testID="quietStatus" style={s.outcome}>Quiet cart: {quiet}</Text>
+      <Text testID="liveStatus" style={s.outcome} accessibilityLiveRegion="polite">Live cart: {live}</Text>
+    </ScrollView>
+  );
+}
+
 // ObstructionScreen is the control for an element that is in the hierarchy,
 // marked visible, with real bounds, that a tap cannot reach because the app
 // has drawn something else over it. Mobium refuses a target under a system
@@ -3126,6 +3188,12 @@ export default function App() {
           <A11yScreen />
         </View>
       )}
+      {screen === 'spoken' && (
+        <View style={s.fill}>
+          <View style={s.padTop}>{back}</View>
+          <SpokenScreen />
+        </View>
+      )}
 
       {screen === 'obstruction' && (
         <View style={s.fill}>
@@ -3317,6 +3385,8 @@ const lightStyles = StyleSheet.create({
   tapZone: {height: 140, borderRadius: 10, backgroundColor: '#2f7d4f', alignItems: 'center', justifyContent: 'center'},
   motionTarget: {width: '55%', backgroundColor: '#2f7d4f', padding: 14, borderRadius: 8},
   obsCase: {position: 'relative'},
+  spokenRow: {flexDirection: 'row', gap: 10},
+  spokenCell: {flex: 1, minHeight: 48},
   obsCover: {position: 'absolute', top: 0, bottom: 10, justifyContent: 'center', alignItems: 'center', borderRadius: 8},
   obsCoverText: {color: '#fff', fontSize: 13},
   obsFull: {left: 0, right: 0, backgroundColor: '#5832FA'},
