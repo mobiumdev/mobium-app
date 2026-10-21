@@ -60,7 +60,11 @@ in the Mobium repository.
   WKWebView is invisible to any debugger unless the app opts in; that is the
   reason this app exists.
 - **Pages are inline HTML, never fetched**, so no check depends on a network or
-  a domain. The one real link is `LINK_URL`, defined once.
+  a domain. The one real link is `LINK_URL`, defined once. The Network Demo
+  is the one screen that makes requests, and only to `NETWORK_URL` — a
+  server the check itself runs on the Mac — or to whatever a person types;
+  its plain HTTP is permitted to the Mac's addresses alone
+  (`plugins/withNetworkSecurity.js`).
 - **Never real data.** The demo account is `mobium` / `hunter2`, shown on
   screen. Nothing personal, no real credentials, no real endpoints, and no
   analytics: the app is installed on people's phones.

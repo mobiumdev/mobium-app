@@ -40,6 +40,11 @@ h1{font-size:20px;margin:0 0 12px}a{color:#0a58ca}</style></head>
 // it through app_eval, which asks the page directly instead of inferring the
 // answer from what is on screen.
 const LINK_URL = 'https://github.com/mobiumdev';
+// Where the Network Demo sends its requests unless told otherwise: a server a
+// check runs on the Mac, which `adb reverse` puts at 127.0.0.1 on an Android
+// device and a simulator reaches as it is. Never a real endpoint — the field
+// takes any address, and only someone who types one calls the internet.
+const NETWORK_URL = 'http://127.0.0.1:8765/mobium';
 const LEARN_MORE = `<p><a id="link" href="${LINK_URL}">Learn more</a></p>`;
 
 // ROTATE is the only thing on either platform that can say whether a rotation
@@ -389,7 +394,7 @@ bottom says which one the tap reached.</p>
   document.getElementById('frames').appendChild(cross);
 </script>`);
 
-type Screen = 'home' | 'webviewhub' | 'frames' | 'webview' | 'wide' | 'dual' | 'login' | 'otp' | 'secret' | 'location' | 'pager' | 'popup' | 'form' | 'gesturehub' | 'tappress' | 'drag' | 'flick' | 'pinch' | 'multitouch' | 'rotate' | 'doubletap' | 'motion' | 'crash' | 'storage' | 'dialogs' | 'obstruction' | 'a11y' | 'actionable' | 'webform' | 'layout' | 'webstorage' | 'battery' | 'files' | 'biometrics' | 'feed' | 'table' | 'slider' | 'busy' | 'audio';
+type Screen = 'home' | 'webviewhub' | 'frames' | 'webview' | 'wide' | 'dual' | 'login' | 'otp' | 'secret' | 'location' | 'pager' | 'popup' | 'form' | 'gesturehub' | 'tappress' | 'drag' | 'flick' | 'pinch' | 'multitouch' | 'rotate' | 'doubletap' | 'motion' | 'crash' | 'storage' | 'dialogs' | 'obstruction' | 'a11y' | 'actionable' | 'webform' | 'layout' | 'webstorage' | 'battery' | 'files' | 'biometrics' | 'feed' | 'table' | 'slider' | 'busy' | 'audio' | 'network';
 
 const SCREENS: [Screen, string][] = [
   ['webviewhub', 'WebViews'],
@@ -415,6 +420,7 @@ const SCREENS: [Screen, string][] = [
   ['slider', 'Slider Demo'],
   ['busy', 'Busy Demo'],
   ['audio', 'Audio Demo'],
+  ['network', 'Network Demo'],
 ];
 
 // The gesture witnesses, in the order of the touch-gesture charts mobium's
@@ -793,6 +799,72 @@ hs.forEach((h,i)=>{h.addEventListener('keydown',e=>{const n=+h.getAttribute('ari
 // window, where no lift is heard; Refresh twice runs two at once; Keep
 // polling is work that never finishes; Crash during a refresh dies holding
 // the work, so nothing ever says it ended.
+// NetworkScreen is the app's only traffic, and the control a proxy is tested
+// against: nothing else here makes a request, so with no screen like this a
+// proxy that saw nothing could not be told from an app that sent nothing.
+// Each request says what came back, a native one and a WebView's page alike,
+// and `sent` counts presses, so a request that failed reads differently from
+// one never made. Plain HTTP is allowed to the check's own server only
+// (plugins/withNetworkSecurity.js), and certificates a person installed are
+// trusted, so a proxy's root decrypts this app's HTTPS where it would not
+// decrypt an app that did not opt in.
+function NetworkScreen() {
+  const [url, setUrl] = useState(NETWORK_URL);
+  const [sent, setSent] = useState(0);
+  const [fetched, setFetched] = useState('fetch: not sent yet');
+  const [page, setPage] = useState('');
+  const [web, setWeb] = useState('page: not loaded yet');
+  const doFetch = async () => {
+    setSent(n => n + 1);
+    setFetched('fetch: waiting');
+    const started = Date.now();
+    try {
+      const res = await fetch(url, {headers: {'X-Mobium-Demo': 'fetch'}});
+      const body = await res.text();
+      const head = body.replace(/\s+/g, ' ').trim().slice(0, 40);
+      setFetched(`fetch: ${res.status}, ${body.length} bytes in ${Date.now() - started} ms — ${head}`);
+    } catch (e) {
+      setFetched(`fetch: failed — ${String((e as Error).message || e)}`);
+    }
+  };
+  const load = () => {
+    setSent(n => n + 1);
+    setWeb('page: loading');
+    // A new URL each time, so a second load of the same address is a load.
+    setPage(url + (url.includes('?') ? '&' : '?') + 'load=' + Date.now());
+  };
+  return (
+    <View style={{flex: 1}}>
+      <Text style={s.h1}>Network</Text>
+      <Text style={s.note}>Both go to the address below: by default a server a check runs on the Mac, reached through adb reverse on Android and directly on a simulator.</Text>
+      <TextInput testID="netUrl" accessibilityLabel="request URL" style={s.input} value={url}
+        onChangeText={setUrl} autoCapitalize="none" autoCorrect={false} keyboardType="url" />
+      <Btn id="netFetch" label="Fetch" onPress={doFetch} />
+      <Text testID="netFetchResult" style={s.outcome}>{fetched}</Text>
+      <Btn id="netLoad" label="Load in a WebView" onPress={load} />
+      <Text testID="netWebResult" style={s.outcome}>{web}</Text>
+      <Text testID="netSent" style={s.note}>requests sent: {sent}</Text>
+      {page !== '' && (
+        <WebView
+          testID="netWebview"
+          source={{uri: page}}
+          webviewDebuggingEnabled={true}
+          // The event is read at once: by the time a state updater runs,
+          // React Native has let go of it, and reading it there crashed.
+          onLoadEnd={e => {
+            const {loading, title} = e.nativeEvent;
+            // iOS has no title yet when the load ends; Android has one.
+            if (!loading) setWeb(w => w === 'page: loading' ? 'page: loaded' + (title ? ` "${title}"` : '') : w);
+          }}
+          onHttpError={e => { const {statusCode} = e.nativeEvent; setWeb(`page: HTTP ${statusCode}`); }}
+          onError={e => { const {description} = e.nativeEvent; setWeb(`page: failed — ${description}`); }}
+          style={s.web}
+        />
+      )}
+    </View>
+  );
+}
+
 function BusyScreen() {
   const [gen, setGen] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -3088,6 +3160,13 @@ export default function App() {
         <View style={s.pad}>
           {back}
           <AudioScreen />
+        </View>
+      )}
+
+      {screen === 'network' && (
+        <View style={[s.pad, {flex: 1}]}>
+          {back}
+          <NetworkScreen />
         </View>
       )}
 
