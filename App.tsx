@@ -853,7 +853,8 @@ function NetworkScreen() {
           // React Native has let go of it, and reading it there crashed.
           onLoadEnd={e => {
             const {loading, title} = e.nativeEvent;
-            if (!loading) setWeb(w => w === 'page: loading' ? `page: loaded "${title}"` : w);
+            // iOS has no title yet when the load ends; Android has one.
+            if (!loading) setWeb(w => w === 'page: loading' ? 'page: loaded' + (title ? ` "${title}"` : '') : w);
           }}
           onHttpError={e => { const {statusCode} = e.nativeEvent; setWeb(`page: HTTP ${statusCode}`); }}
           onError={e => { const {description} = e.nativeEvent; setWeb(`page: failed — ${description}`); }}
