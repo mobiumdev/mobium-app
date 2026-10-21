@@ -55,6 +55,7 @@
           "faceIDPermission": "MobiumApp asks for Face ID so a test can sign in with it; nothing is stored."
         }
       ],
+      "./plugins/withSceneLifecycle",
       "./plugins/withoutPushEntitlement",
       "expo-notifications"
     ]
