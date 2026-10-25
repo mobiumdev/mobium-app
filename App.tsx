@@ -2158,7 +2158,7 @@ function DialogScreen() {
   };
   const share = async () => {
     try {
-      const r = await Share.share({message: 'Mobium — mobile automation for agents and humans'});
+      const r = await Share.share({message: 'Mobium — mobile automation for agents and people'});
       // Android resolves with sharedAction however the sheet closed — pressing
       // Back gave "shared" on a Pixel 7 AVD — so there it says only closed.
       if (Platform.OS === 'android') {
