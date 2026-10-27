@@ -3,7 +3,7 @@ import {
   Image, PixelRatio, Platform, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text,
   TextInput, View, Pressable, useWindowDimensions,
 } from 'react-native';
-import {AccessibilityInfo, ActionSheetIOS, ActivityIndicator, BackHandler, FlatList, Alert, Animated, Easing, KeyboardAvoidingView, PanResponder, Share, Switch, ToastAndroid} from 'react-native';
+import {AccessibilityInfo, ActionSheetIOS, ActivityIndicator, BackHandler, FlatList, Alert, Animated, Easing, Keyboard, KeyboardAvoidingView, PanResponder, Share, Switch, ToastAndroid} from 'react-native';
 import {WebView} from 'react-native-webview';
 import Slider from '@react-native-community/slider';
 import * as Battery from 'expo-battery';
@@ -2128,6 +2128,9 @@ function InboxScreen() {
     if (!Number.isFinite(n) || n <= 0) return;
     inbox.seed = n;
     setSeed(n);
+    // The number pad has no return key on iOS: leave the messages in view,
+    // not under it, for whoever reads the screen next.
+    Keyboard.dismiss();
   };
   const deleteAll = () => {
     inbox.deleted = true;
@@ -3225,7 +3228,10 @@ export default function App() {
         </View>
       )}
       {screen === 'inbox' && (
-        <ScrollView testID="inboxList" contentContainerStyle={s.pad}>
+        // Handled: on iOS the number pad has no return key, and a ScrollView
+        // otherwise spends the first tap outside the field on dismissing the
+        // keyboard — Load reported tapped and nothing loaded.
+        <ScrollView testID="inboxList" contentContainerStyle={s.pad} keyboardShouldPersistTaps="handled">
           {back}
           <InboxScreen />
         </ScrollView>
