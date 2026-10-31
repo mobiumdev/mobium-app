@@ -40,19 +40,22 @@ public class ToneModule: Module {
   private var engine = AVAudioEngine()
   private var player = AVAudioPlayerNode()
   private var generation = 0
+  // The engine is wired on the first play, not when the module loads: every
+  // launch loads it, and a simulator started by the nightly at 03:00 had
+  // mainMixerNode wait on an audio server that did not answer, which
+  // AudioToolbox answers with abort(), uncatchable, so the app died at
+  // launch on screens that play nothing (2026-10-27 to 10-30).
+  private var wired = false
 
   public func definition() -> ModuleDefinition {
     Name("Tone")
-
-    OnCreate {
-      self.wire()
-    }
 
     AsyncFunction("playAsync") { (segments: [Segment], usage: String, promise: Promise) in
       guard usage == "media" || usage == "alarm" else {
         promise.reject(UsageException(usage))
         return
       }
+      if !self.wired { self.wire() }
       self.player.stop()
       self.generation += 1
       let buffer = self.render(segments)
@@ -96,7 +99,7 @@ public class ToneModule: Module {
     Function("stop") {
       DispatchQueue.main.async {
         self.generation += 1
-        self.player.stop()
+        if self.wired { self.player.stop() }
       }
     }
   }
@@ -104,6 +107,7 @@ public class ToneModule: Module {
   private func wire() {
     engine.attach(player)
     engine.connect(player, to: engine.mainMixerNode, format: format())
+    wired = true
   }
 
   // A new engine and player, for an output the old ones could not start.
