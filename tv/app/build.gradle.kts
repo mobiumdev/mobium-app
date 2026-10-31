@@ -15,6 +15,15 @@ android {
         versionName = "1.0"
     }
 
+    buildTypes {
+        // Signed with the debug key, as MobiumApp's own release is: an app
+        // under test, installed by hand or by a check, never published to a
+        // store. Unsigned, a release build installs nowhere.
+        release {
+            signingConfig = signingConfigs.getByName("debug")
+        }
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17

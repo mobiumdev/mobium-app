@@ -91,6 +91,36 @@ them. Capitals and surrounding spaces in the username are ignored. To see the
 errors, leave a field empty, use a username shorter than three characters or
 with a space in it, a password shorter than six, or a wrong password.
 
+## Install a release
+
+Each tag `v*` publishes every app in this repository, built by
+`.github/workflows/release.yml`. The file names stay the same from release to
+release:
+
+| File | App |
+| --- | --- |
+| `MobiumApp-android.apk` | MobiumApp, Android |
+| `MobiumApp-ios-simulator.zip` | MobiumApp, iOS simulator |
+| `MobiumTV-android.apk` | MobiumTV, Android TV and Fire TV |
+| `MobiumTV-tvos-simulator.zip` | MobiumTV, Apple TV simulator |
+| `MobiumFlutter-android.apk` | the Flutter app, Android |
+| `MobiumFlutter-ios-simulator-debug.zip` | the Flutter app, iOS simulator (debug: Flutter builds nothing else for one) |
+| `MobiumClipDemo-ios-simulator.zip` | the App Clip demo, iOS simulator |
+
+```sh
+gh release download -R mobiumdev/mobium-app -p MobiumApp-android.apk
+adb install -r MobiumApp-android.apk
+
+gh release download -R mobiumdev/mobium-app -p MobiumApp-ios-simulator.zip
+unzip MobiumApp-ios-simulator.zip && xcrun simctl install <udid> MobiumApp.app
+```
+
+Android builds are signed with a debug key and the iOS and tvOS builds are
+for the simulator only: apps under test, never published to a store. For a
+phone, build it as below. An APK built on your machine is signed with your
+own debug key, so uninstall it before installing a release over it (MobiumApp
+itself is the exception: Expo ships one debug key for every machine).
+
 ## Build
 
 ```sh
