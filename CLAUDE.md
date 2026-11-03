@@ -9,8 +9,8 @@ screens.
 
 ## Expo has changed
 
-This is Expo SDK 57. Read the versioned docs at
-https://docs.expo.dev/versions/v57.0.0/ before writing code; APIs and config
+This is Expo SDK 58. Read the versioned docs at
+https://docs.expo.dev/versions/v58.0.0/ before writing code; APIs and config
 keys from older SDKs are often wrong here.
 
 ## Commands
@@ -79,12 +79,12 @@ in the Mobium repository.
   native behavior through `app.json` and Expo config plugins instead.
 - **iOS 27 requires the scene life cycle.** An app built with the iOS 27 SDK
   that creates its window in the app delegate traps at launch on iOS 27
-  (`_UIApplicationEvaluateRuntimeIssueForNoSceneLifecycleAdoption`), and
-  Expo SDK 57's template still does, so a fresh prebuild crashes on a phone
-  running it. `plugins/withSceneLifecycle.js` hands the window to Expo's
-  `ExpoAppSceneDelegate` and names it in the scene manifest; keep it, and
-  run `expo prebuild --clean` after changing it, since a plain prebuild
-  keeps an `AppDelegate.swift` that is already there.
+  (`_UIApplicationEvaluateRuntimeIssueForNoSceneLifecycleAdoption`). Expo SDK
+  57's template still did, and `plugins/withSceneLifecycle.js` moved the
+  window to the scene delegate; since SDK 58 prebuild generates
+  `SceneDelegate.swift` and the scene manifest itself, and the plugin is
+  gone. Run `expo prebuild --clean` after an SDK upgrade, since a plain
+  prebuild keeps an `AppDelegate.swift` that is already there.
 - **The app must stay signable with a free Apple ID**, which a personal team
   cannot do for Push Notifications. `plugins/withoutPushEntitlement.js` removes
   the `aps-environment` entitlement `expo-notifications` adds, and it must be
