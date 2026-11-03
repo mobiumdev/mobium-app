@@ -4,6 +4,7 @@ import {
   TextInput, View, Pressable, useWindowDimensions,
 } from 'react-native';
 import {AccessibilityInfo, ActionSheetIOS, ActivityIndicator, BackHandler, FlatList, Alert, Animated, Easing, Keyboard, KeyboardAvoidingView, PanResponder, Share, Switch, ToastAndroid} from 'react-native';
+import type {TextInputInstance, ViewInstance} from 'react-native';
 import {WebView} from 'react-native-webview';
 import Slider from '@react-native-community/slider';
 import * as Battery from 'expo-battery';
@@ -682,7 +683,7 @@ function FeedScreen() {
             </View>
           ) : done ? (
             <Text testID="feedEnd" style={s.note}>End of feed</Text>
-          ) : null
+          ) : undefined
         }
       />
     </View>
@@ -1099,7 +1100,7 @@ function GestureScreen() {
 function DragTarget() {
   const [info, setInfo] = useState('no drag yet');
   const drop = useRef({top: 0, bottom: 0});
-  const dropView = useRef<View>(null);
+  const dropView = useRef<ViewInstance>(null);
   const st = useRef({t0: 0, first: 0, last: 0, moves: 0, realMoves: 0, px: 0, py: 0});
 
   const pan = useRef(
@@ -2075,7 +2076,7 @@ function StorageScreen() {
         f.create();
       }
       const n = count + 1;
-      f.write(JSON.stringify({count: n}));
+      f.writeSync(JSON.stringify({count: n}));
       setCount(n);
       setPresent(true);
     } catch (e) {
@@ -2953,7 +2954,7 @@ function OtpScreen() {
   const [attempts, setAttempts] = useState(0);
   const [outcome, setOutcome] = useState('no code sent');
   const [showCode, setShowCode] = useState(false);
-  const refs = useRef<(TextInput | null)[]>([]);
+  const refs = useRef<(TextInputInstance | null)[]>([]);
 
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 1000);
@@ -3108,7 +3109,7 @@ function LoginScreen({onLogin}: {onLogin: (username: string) => void}) {
   const [touched, setTouched] = useState({user: false, pass: false});
   const [formErr, setFormErr] = useState('');
   const [busy, setBusy] = useState(false);
-  const passRef = useRef<TextInput>(null);
+  const passRef = useRef<TextInputInstance>(null);
 
   const userProblem = usernameProblem(user);
   const passProblem = passwordProblem(pass);
